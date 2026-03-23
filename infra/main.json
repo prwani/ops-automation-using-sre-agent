@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.40.2.10011",
-      "templateHash": "12431223694192990478"
+      "templateHash": "8949922178373434529"
     }
   },
   "parameters": {
@@ -45,6 +45,7 @@
   },
   "variables": {
     "suffix": "[format('{0}-{1}', parameters('projectPrefix'), parameters('environment'))]",
+    "uniqueSuffix": "[format('{0}-{1}-sc', parameters('projectPrefix'), parameters('environment'))]",
     "tags": {
       "project": "ops-automation-using-sre-agent",
       "environment": "[parameters('environment')]",
@@ -86,7 +87,7 @@
     {
       "type": "Microsoft.Storage/storageAccounts",
       "apiVersion": "2023-05-01",
-      "name": "[format('st{0}fn', replace(variables('suffix'), '-', ''))]",
+      "name": "[format('st{0}fn', replace(variables('uniqueSuffix'), '-', ''))]",
       "location": "[parameters('location')]",
       "kind": "StorageV2",
       "tags": "[variables('tags')]",
@@ -102,7 +103,7 @@
     {
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2023-07-01",
-      "name": "[format('kv-{0}', variables('suffix'))]",
+      "name": "[format('kv-{0}', variables('uniqueSuffix'))]",
       "location": "[parameters('location')]",
       "tags": "[variables('tags')]",
       "properties": {
@@ -124,7 +125,7 @@
     {
       "type": "Microsoft.DocumentDB/databaseAccounts",
       "apiVersion": "2024-02-15-preview",
-      "name": "[format('cosmos-{0}', variables('suffix'))]",
+      "name": "[format('cosmos-{0}', variables('uniqueSuffix'))]",
       "location": "[parameters('location')]",
       "kind": "GlobalDocumentDB",
       "tags": "[variables('tags')]",
@@ -153,20 +154,20 @@
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
       "apiVersion": "2024-02-15-preview",
-      "name": "[format('{0}/{1}', format('cosmos-{0}', variables('suffix')), 'ops-automation')]",
+      "name": "[format('{0}/{1}', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation')]",
       "properties": {
         "resource": {
           "id": "ops-automation"
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]"
       ]
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
       "apiVersion": "2024-02-15-preview",
-      "name": "[format('{0}/{1}/{2}', format('cosmos-{0}', variables('suffix')), 'ops-automation', 'runs')]",
+      "name": "[format('{0}/{1}/{2}', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation', 'runs')]",
       "properties": {
         "resource": {
           "id": "runs",
@@ -192,13 +193,13 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('cosmos-{0}', variables('suffix')), 'ops-automation')]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation')]"
       ]
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
       "apiVersion": "2024-02-15-preview",
-      "name": "[format('{0}/{1}/{2}', format('cosmos-{0}', variables('suffix')), 'ops-automation', 'feedback')]",
+      "name": "[format('{0}/{1}/{2}', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation', 'feedback')]",
       "properties": {
         "resource": {
           "id": "feedback",
@@ -211,13 +212,13 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('cosmos-{0}', variables('suffix')), 'ops-automation')]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation')]"
       ]
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
       "apiVersion": "2024-02-15-preview",
-      "name": "[format('{0}/{1}/{2}', format('cosmos-{0}', variables('suffix')), 'ops-automation', 'memories')]",
+      "name": "[format('{0}/{1}/{2}', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation', 'memories')]",
       "properties": {
         "resource": {
           "id": "memories",
@@ -230,7 +231,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('cosmos-{0}', variables('suffix')), 'ops-automation')]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('cosmos-{0}', variables('uniqueSuffix')), 'ops-automation')]"
       ]
     },
     {
@@ -241,8 +242,8 @@
       "tags": "[variables('tags')]",
       "kind": "linux",
       "sku": {
-        "name": "F1",
-        "tier": "Free"
+        "name": "B1",
+        "tier": "Basic"
       },
       "properties": {
         "reserved": true
@@ -251,7 +252,7 @@
     {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2023-12-01",
-      "name": "[format('app-{0}-api', variables('suffix'))]",
+      "name": "[format('app-{0}-api', variables('uniqueSuffix'))]",
       "location": "[parameters('location')]",
       "tags": "[variables('tags')]",
       "identity": {
@@ -270,7 +271,7 @@
             },
             {
               "name": "COSMOS_ENDPOINT",
-              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))), '2024-02-15-preview').documentEndpoint]"
+              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))), '2024-02-15-preview').documentEndpoint]"
             },
             {
               "name": "COSMOS_DATABASE",
@@ -290,28 +291,13 @@
       "dependsOn": [
         "[resourceId('Microsoft.Insights/components', format('ai-{0}', variables('suffix')))]",
         "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]"
       ]
-    },
-    {
-      "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2023-12-01",
-      "name": "[format('asp-{0}-fn', variables('suffix'))]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('tags')]",
-      "kind": "functionapp",
-      "sku": {
-        "name": "Y1",
-        "tier": "Dynamic"
-      },
-      "properties": {
-        "reserved": true
-      }
     },
     {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2023-12-01",
-      "name": "[format('func-{0}', variables('suffix'))]",
+      "name": "[format('func-{0}', variables('uniqueSuffix'))]",
       "location": "[parameters('location')]",
       "kind": "functionapp,linux",
       "tags": "[variables('tags')]",
@@ -319,14 +305,14 @@
         "type": "SystemAssigned"
       },
       "properties": {
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}-fn', variables('suffix')))]",
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}', variables('suffix')))]",
         "httpsOnly": true,
         "siteConfig": {
           "linuxFxVersion": "Python|3.11",
           "appSettings": [
             {
               "name": "AzureWebJobsStorage",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix=core.windows.net', format('st{0}fn', replace(variables('suffix'), '-', '')), listKeys(resourceId('Microsoft.Storage/storageAccounts', format('st{0}fn', replace(variables('suffix'), '-', ''))), '2023-05-01').keys[0].value)]"
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix=core.windows.net', format('st{0}fn', replace(variables('uniqueSuffix'), '-', '')), listKeys(resourceId('Microsoft.Storage/storageAccounts', format('st{0}fn', replace(variables('uniqueSuffix'), '-', ''))), '2023-05-01').keys[0].value)]"
             },
             {
               "name": "FUNCTIONS_WORKER_RUNTIME",
@@ -342,7 +328,7 @@
             },
             {
               "name": "COSMOS_ENDPOINT",
-              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))), '2024-02-15-preview').documentEndpoint]"
+              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))), '2024-02-15-preview').documentEndpoint]"
             },
             {
               "name": "COSMOS_DATABASE",
@@ -361,68 +347,68 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Insights/components', format('ai-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}-fn', variables('suffix')))]",
+        "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}', variables('suffix')))]",
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]",
         "[resourceId('Microsoft.OperationalInsights/workspaces', format('law-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', format('st{0}fn', replace(variables('suffix'), '-', '')))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', format('st{0}fn', replace(variables('uniqueSuffix'), '-', '')))]"
       ]
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
       "apiVersion": "2022-08-15",
-      "name": "[format('{0}/{1}', format('cosmos-{0}', variables('suffix')), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))), resourceId('Microsoft.Web/sites', format('func-{0}', variables('suffix'))), 'CosmosSqlDataContributor'))]",
+      "name": "[format('{0}/{1}', format('cosmos-{0}', variables('uniqueSuffix')), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))), resourceId('Microsoft.Web/sites', format('func-{0}', variables('uniqueSuffix'))), 'CosmosSqlDataContributor'))]",
       "properties": {
-        "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002', resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('func-{0}', variables('suffix'))), '2023-12-01', 'full').identity.principalId]",
-        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]"
+        "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002', resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('func-{0}', variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
+        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.Web/sites', format('func-{0}', variables('suffix')))]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]",
+        "[resourceId('Microsoft.Web/sites', format('func-{0}', variables('uniqueSuffix')))]"
       ]
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
       "apiVersion": "2022-08-15",
-      "name": "[format('{0}/{1}', format('cosmos-{0}', variables('suffix')), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))), resourceId('Microsoft.Web/sites', format('app-{0}-api', variables('suffix'))), 'CosmosSqlDataContributor'))]",
+      "name": "[format('{0}/{1}', format('cosmos-{0}', variables('uniqueSuffix')), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))), resourceId('Microsoft.Web/sites', format('app-{0}-api', variables('uniqueSuffix'))), 'CosmosSqlDataContributor'))]",
       "properties": {
-        "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002', resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('app-{0}-api', variables('suffix'))), '2023-12-01', 'full').identity.principalId]",
-        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]"
+        "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002', resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('app-{0}-api', variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
+        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.Web/sites', format('app-{0}-api', variables('suffix')))]"
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix')))]",
+        "[resourceId('Microsoft.Web/sites', format('app-{0}-api', variables('uniqueSuffix')))]"
       ]
     },
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('suffix')))]",
-      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('suffix'))), resourceId('Microsoft.Web/sites', format('func-{0}', variables('suffix'))), 'KvSecretsUser')]",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('uniqueSuffix')))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('uniqueSuffix'))), resourceId('Microsoft.Web/sites', format('func-{0}', variables('uniqueSuffix'))), 'KvSecretsUser')]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('func-{0}', variables('suffix'))), '2023-12-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('func-{0}', variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Web/sites', format('func-{0}', variables('suffix')))]",
-        "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('suffix')))]"
+        "[resourceId('Microsoft.Web/sites', format('func-{0}', variables('uniqueSuffix')))]",
+        "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('uniqueSuffix')))]"
       ]
     }
   ],
   "outputs": {
     "functionAppName": {
       "type": "string",
-      "value": "[format('func-{0}', variables('suffix'))]"
+      "value": "[format('func-{0}', variables('uniqueSuffix'))]"
     },
     "portalApiName": {
       "type": "string",
-      "value": "[format('app-{0}-api', variables('suffix'))]"
+      "value": "[format('app-{0}-api', variables('uniqueSuffix'))]"
     },
     "cosmosEndpoint": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('suffix'))), '2024-02-15-preview').documentEndpoint]"
+      "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosmos-{0}', variables('uniqueSuffix'))), '2024-02-15-preview').documentEndpoint]"
     },
     "logAnalyticsWorkspaceId": {
       "type": "string",
@@ -430,7 +416,7 @@
     },
     "keyVaultUri": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('suffix'))), '2023-07-01').vaultUri]"
+      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', variables('uniqueSuffix'))), '2023-07-01').vaultUri]"
     },
     "appInsightsConnectionString": {
       "type": "string",

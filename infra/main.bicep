@@ -12,6 +12,7 @@ param projectPrefix string = 'opsauto'
 param arcSubscriptionId string = subscription().subscriptionId
 
 var suffix = '${projectPrefix}-${environment}'
+var uniqueSuffix = '${projectPrefix}-${environment}-sc'
 var tags = {
   project: 'ops-automation-using-sre-agent'
   environment: environment
@@ -48,7 +49,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 
 // Storage Account (Azure Functions requirement)
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'st${replace(suffix, '-', '')}fn'
+  name: 'st${replace(uniqueSuffix, '-', '')}fn'
   location: location
   kind: 'StorageV2'
   tags: tags
@@ -64,7 +65,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 
 // Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: 'kv-${suffix}'
+  name: 'kv-${uniqueSuffix}'
   location: location
   tags: tags
   properties: {
@@ -86,7 +87,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 
 // Cosmos DB Account (serverless)
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-02-15-preview' = {
-  name: 'cosmos-${suffix}'
+  name: 'cosmos-${uniqueSuffix}'
   location: location
   kind: 'GlobalDocumentDB'
   tags: tags
@@ -177,8 +178,8 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   tags: tags
   kind: 'linux'
   sku: {
-    name: 'F1'
-    tier: 'Free'
+    name: 'B1'
+    tier: 'Basic'
   }
   properties: {
     reserved: true
@@ -187,7 +188,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
 
 // Portal API (FastAPI on App Service)
 resource portalApi 'Microsoft.Web/sites@2023-12-01' = {
-  name: 'app-${suffix}-api'
+  name: 'app-${uniqueSuffix}-api'
   location: location
   tags: tags
   identity: {
@@ -225,23 +226,9 @@ resource portalApi 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
-// Azure Functions App (Consumption plan)
-resource functionPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: 'asp-${suffix}-fn'
-  location: location
-  tags: tags
-  kind: 'functionapp'
-  sku: {
-    name: 'Y1'
-    tier: 'Dynamic'
-  }
-  properties: {
-    reserved: true
-  }
-}
-
+// Azure Functions App (hosted on same App Service Plan to avoid Dynamic SKU quota issues)
 resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
-  name: 'func-${suffix}'
+  name: 'func-${uniqueSuffix}'
   location: location
   kind: 'functionapp,linux'
   tags: tags
@@ -249,7 +236,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
     type: 'SystemAssigned'
   }
   properties: {
-    serverFarmId: functionPlan.id
+    serverFarmId: appServicePlan.id
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'Python|3.11'
@@ -332,3 +319,4 @@ output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
 output logAnalyticsWorkspaceId string = logAnalytics.properties.customerId
 output keyVaultUri string = keyVault.properties.vaultUri
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
+
