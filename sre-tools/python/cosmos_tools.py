@@ -31,16 +31,29 @@ class CosmosTools:
     ) -> list[dict[str, Any]]:
         """Query automation run history from Cosmos DB."""
         conditions = ["SELECT * FROM c WHERE 1=1"]
+        parameters: list[dict[str, Any]] = []
         if task_type:
-            conditions.append(f"AND c.taskType = '{task_type}'")
+            conditions.append("AND c.taskType = @taskType")
+            parameters.append({"name": "@taskType", "value": task_type})
         if status:
-            conditions.append(f"AND c.status = '{status}'")
+            conditions.append("AND c.status = @status")
+            parameters.append({"name": "@status", "value": status})
+        if date:
+            conditions.append("AND c.partitionKey = @partitionKey")
+            parameters.append({"name": "@partitionKey", "value": date})
         query = " ".join(conditions) + f" ORDER BY c._ts DESC OFFSET 0 LIMIT {limit}"
 
         async with await self._get_client() as client:
             db = client.get_database_client(self.database)
             container = db.get_container_client("runs")
-            items = [item async for item in container.query_items(query=query)]
+            items = [
+                item
+                async for item in container.query_items(
+                    query=query,
+                    parameters=parameters,
+                    enable_cross_partition_query=True,
+                )
+            ]
             log.info("cosmos_runs_queried", count=len(items), task_type=task_type)
             return items
 
@@ -52,18 +65,30 @@ class CosmosTools:
     ) -> list[dict[str, Any]]:
         """Check for active memory/suppression rules for a server."""
         now = datetime.now(timezone.utc).isoformat()
-        query = f"""
-            SELECT * FROM c 
+        query = """
+            SELECT * FROM c
             WHERE c.status = 'active'
-            AND c.expiresAt > '{now}'
-            AND (c.scope.serverFilter = '{server_id}' OR c.scope.serverFilter = '*')
+            AND c.expiresAt > @now
+            AND (c.scope.serverFilter = @serverId OR c.scope.serverFilter = '*')
         """
+        parameters: list[dict[str, Any]] = [
+            {"name": "@now", "value": now},
+            {"name": "@serverId", "value": server_id},
+        ]
         if check_type:
-            query += f" AND (c.scope.checkFilter = '{check_type}' OR c.scope.checkFilter = '*')"
+            query += " AND (c.scope.checkFilter = @checkType OR c.scope.checkFilter = '*')"
+            parameters.append({"name": "@checkType", "value": check_type})
 
         async with await self._get_client() as client:
             db = client.get_database_client(self.database)
             container = db.get_container_client("memories")
-            items = [item async for item in container.query_items(query=query)]
+            items = [
+                item
+                async for item in container.query_items(
+                    query=query,
+                    parameters=parameters,
+                    enable_cross_partition_query=True,
+                )
+            ]
             log.info("cosmos_memories_checked", server_id=server_id, count=len(items))
             return items

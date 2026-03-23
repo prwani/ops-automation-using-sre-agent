@@ -2,6 +2,7 @@
 
 import asyncio
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 import structlog
@@ -64,7 +65,7 @@ class DefenderAdapter(DefenderAdapterBase):
         url = (
             f"{_ARM_BASE}/subscriptions/{subscription_id}"
             f"/providers/Microsoft.Security/regulatoryComplianceStandards"
-            f"/{standard}/controls?api-version=2019-01-01-preview"
+            f"/{quote(standard, safe='')}/controls?api-version=2019-01-01-preview"
         )
         loop = asyncio.get_event_loop()
         token = await loop.run_in_executor(None, self._arm_token)

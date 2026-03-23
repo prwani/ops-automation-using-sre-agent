@@ -2,8 +2,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .config import settings
-from .routers import runs, chat, feedback, memories
+from config import settings
+from routers import runs, chat, feedback, memories
 
 app = FastAPI(
     title="Ops Automation Portal API",

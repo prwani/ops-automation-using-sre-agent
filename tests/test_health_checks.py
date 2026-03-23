@@ -88,6 +88,7 @@ def _make_engine(
         arc_adapter=arc,
         log_analytics_client=la_client,
         cosmos_client=cosmos,
+        workspace_id="test-workspace-id",
         suppressions=suppressions or {},
     )
 
@@ -156,9 +157,42 @@ async def test_server_unreachable_returns_unknown():
         arc_adapter=arc,
         log_analytics_client=MagicMock(),
         cosmos_client=MagicMock(),
+        workspace_id="test-workspace-id",
     )
     result = await engine.run_server(server.server_id)
     assert result.status == HealthStatus.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_service_notfound_is_warning():
+    """A service returning NotFound should be treated as stopped (WARNING)."""
+    server = _make_server()
+    statuses = {
+        "wuauserv": "NotFound",  # service missing → should be treated as stopped
+        "WinRM": "Running",
+        "EventLog": "Running",
+        "MpsSvc": "Running",
+        "MdCoreSvc": "Running",
+    }
+    engine = _make_engine([server], service_statuses=statuses)
+    result = await engine.run_server(server.server_id)
+    assert result.checks["services"]["status"] == HealthStatus.WARNING
+
+
+@pytest.mark.asyncio
+async def test_critical_service_notfound_is_critical():
+    """A critical service returning NotFound should trigger CRITICAL."""
+    server = _make_server()
+    statuses = {
+        "wuauserv": "Running",
+        "WinRM": "NotFound",  # critical service missing
+        "EventLog": "Running",
+        "MpsSvc": "Running",
+        "MdCoreSvc": "Running",
+    }
+    engine = _make_engine([server], service_statuses=statuses)
+    result = await engine.run_server(server.server_id)
+    assert result.checks["services"]["status"] == HealthStatus.CRITICAL
 
 
 @pytest.mark.asyncio

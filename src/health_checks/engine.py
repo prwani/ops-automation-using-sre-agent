@@ -63,12 +63,14 @@ class HealthCheckEngine:
         arc_adapter: ArcAdapterBase,
         log_analytics_client: Any,
         cosmos_client: Any,
+        workspace_id: str = "",
         thresholds: HealthCheckThresholds | None = None,
         suppressions: dict[str, Any] | None = None,
     ) -> None:
         self._arc = arc_adapter
         self._la_client = log_analytics_client
         self._cosmos = cosmos_client
+        self._workspace_id = workspace_id
         self._thresholds = thresholds or HealthCheckThresholds()
         self._suppressions = suppressions or {}
 
@@ -182,7 +184,7 @@ class HealthCheckEngine:
         if isinstance(services, dict):
             services = [services]
 
-        stopped = [s for s in services if s.get("Status") not in ("Running", "NotFound")]
+        stopped = [s for s in services if s.get("Status") not in ("Running",)]
         critical_stopped = [
             s for s in stopped if s.get("Name") in ("MdCoreSvc", "WinRM")
         ]
@@ -238,7 +240,11 @@ Perf
         try:
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
-                None, lambda: self._la_client.query_workspace(query=kql)
+                None,
+                lambda: self._la_client.query_workspace(
+                    workspace_id=self._workspace_id,
+                    query=kql,
+                ),
             )
             rows = list(response.tables[0].rows) if response.tables else []
         except Exception as exc:

@@ -6,8 +6,8 @@ import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from ..auth import require_role
-from ..config import settings
+from auth import require_role
+from config import settings
 
 router = APIRouter(tags=["chat"])
 

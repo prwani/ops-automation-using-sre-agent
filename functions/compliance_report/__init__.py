@@ -13,8 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.adapters.factory import get_defender_adapter
 from src.compliance.engine import ComplianceEngine
 
+app = func.FunctionApp()
 
-@func.timer_trigger(
+
+@app.timer_trigger(
     schedule="0 0 7 * * *",
     arg_name="timer",
     run_on_startup=False,
@@ -25,16 +27,15 @@ def compliance_report(timer: func.TimerRequest) -> None:
     logging.info("Compliance report function triggered")
 
     credential = ManagedIdentityCredential()
-    defender_adapter = get_defender_adapter()
-
     cosmos_client = CosmosClient(
         url=os.environ["COSMOS_ENDPOINT"],
         credential=credential,
     )
 
     engine = ComplianceEngine(
-        defender_adapter=defender_adapter,
+        defender_adapter=get_defender_adapter(),
         cosmos_client=cosmos_client,
+        cosmos_database=os.environ.get("COSMOS_DATABASE", "ops-automation"),
     )
 
     import asyncio

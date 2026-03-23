@@ -2,7 +2,7 @@
 
 from azure.cosmos.aio import CosmosClient
 from azure.identity.aio import DefaultAzureCredential
-from .config import settings
+from config import settings
 
 _client: CosmosClient | None = None
 

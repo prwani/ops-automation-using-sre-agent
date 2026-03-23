@@ -8,7 +8,7 @@
     "LOG_ANALYTICS_WORKSPACE_ID": "<workspace-id>",
     "COSMOS_ENDPOINT": "https://<account>.documents.azure.com:443/",
     "COSMOS_DATABASE": "ops-automation",
-    "GLPI_BASE_URL": "http://localhost:8080/apirest.php",
+    "GLPI_BASE_URL": "http://localhost:8080",
     "GLPI_APP_TOKEN": "<glpi-app-token>",
     "GLPI_USER_TOKEN": "<glpi-user-token>",
     "SRE_AGENT_WEBHOOK_URL": "<sre-agent-webhook-url>",

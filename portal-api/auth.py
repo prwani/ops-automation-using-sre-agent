@@ -4,7 +4,7 @@ import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from .config import settings
+from config import settings
 
 security = HTTPBearer()
 
@@ -42,7 +42,7 @@ async def get_current_user(
             token,
             key,
             algorithms=["RS256"],
-            audience=settings.azure_client_id,
+            audience=f"api://{settings.azure_client_id}",
         )
         return payload
     except JWTError as exc:

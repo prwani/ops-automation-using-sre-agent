@@ -13,8 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.adapters.factory import get_arc_adapter, get_cmdb_adapter, get_itsm_adapter
 from src.cmdb.reconciler import CmdbReconciler
 
+app = func.FunctionApp()
 
-@func.timer_trigger(
+
+@app.timer_trigger(
     schedule="0 0 8 1 * *",
     arg_name="timer",
     run_on_startup=False,
@@ -40,8 +42,8 @@ def cmdb_sync(timer: func.TimerRequest) -> None:
     import asyncio
     result = asyncio.run(reconciler.run_reconciliation())
     logging.info(
-        "CMDB sync complete. New: %d, Stale: %d, Drift: %d",
-        len(result.get("new_in_arc", [])),
-        len(result.get("stale_in_cmdb", [])),
-        len(result.get("drift", [])),
+        "CMDB sync complete. Discrepancies: %d (Arc servers: %d, CMDB records: %d)",
+        result.get("discrepancy_count", 0),
+        result.get("arc_server_count", 0),
+        result.get("cmdb_record_count", 0),
     )

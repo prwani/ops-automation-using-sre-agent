@@ -5,9 +5,9 @@ from typing import Any
 import uuid
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from ..auth import require_role
-from ..cosmos_client import get_cosmos_client
-from ..config import settings
+from auth import require_role
+from cosmos_client import get_cosmos_client
+from config import settings
 
 router = APIRouter(tags=["feedback"])
 

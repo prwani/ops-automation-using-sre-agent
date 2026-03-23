@@ -80,7 +80,19 @@ export function ChatPage() {
         body: JSON.stringify({ message: userMessage }),
       })
 
-      const reader = resp.body!.getReader()
+      if (!resp.ok || !resp.body) {
+        setMessages((prev) => {
+          const updated = [...prev]
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            content: `Error: ${resp.status} ${resp.statusText}`,
+          }
+          return updated
+        })
+        return
+      }
+
+      const reader = resp.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
 

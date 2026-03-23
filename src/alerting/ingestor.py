@@ -26,11 +26,13 @@ class AlertIngestor:
         itsm_adapter: ItsmsAdapterBase,
         cosmos_client: Any,
         subscription_id: str,
+        cosmos_database: str = "ops-automation",
         sre_agent_url: str | None = None,
     ) -> None:
         self._defender = defender_adapter
         self._itsm = itsm_adapter
         self._cosmos = cosmos_client
+        self._cosmos_database = cosmos_database
         self._subscription_id = subscription_id
         self._sre_agent_url = sre_agent_url or os.environ.get("SRE_AGENT_WEBHOOK_URL", "")
 
@@ -84,16 +86,28 @@ class AlertIngestor:
     async def _deduplicate(self, alerts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter out alerts already recorded in Cosmos DB."""
         try:
-            container = self._cosmos.get_container_client("processed-alerts")
+            container = (
+                self._cosmos
+                .get_database_client(self._cosmos_database)
+                .get_container_client("processed-alerts")
+            )
             alert_ids = [a.get("name", a.get("id", "")) for a in alerts]
             if not alert_ids:
                 return []
-            id_filter = ", ".join(f"'{aid}'" for aid in alert_ids)
-            query = f"SELECT c.alert_id FROM c WHERE c.alert_id IN ({id_filter})"
-            processed = {
-                item["alert_id"]
-                for item in container.query_items(query=query, enable_cross_partition_query=True)
-            }
+            # Query in batches of 50 to avoid oversized queries
+            processed: set[str] = set()
+            batch_size = 50
+            for i in range(0, len(alert_ids), batch_size):
+                batch = alert_ids[i : i + batch_size]
+                params = [{"name": f"@id{j}", "value": v} for j, v in enumerate(batch)]
+                placeholders = ", ".join(p["name"] for p in params)
+                query = f"SELECT c.alert_id FROM c WHERE c.alert_id IN ({placeholders})"
+                for item in container.query_items(
+                    query=query,
+                    parameters=params,
+                    enable_cross_partition_query=True,
+                ):
+                    processed.add(item["alert_id"])
         except Exception as exc:
             log.warning("alerting.deduplicate.error", error=str(exc))
             processed = set()
@@ -103,7 +117,11 @@ class AlertIngestor:
     async def _mark_processed(self, alert_id: str) -> None:
         """Record an alert ID in Cosmos DB so it won't be re-processed."""
         try:
-            container = self._cosmos.get_container_client("processed-alerts")
+            container = (
+                self._cosmos
+                .get_database_client(self._cosmos_database)
+                .get_container_client("processed-alerts")
+            )
             container.upsert_item(
                 {
                     "id": alert_id,

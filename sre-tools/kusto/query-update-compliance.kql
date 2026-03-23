@@ -1,12 +1,12 @@
 // query-update-compliance — Missing patches by server
-// Parameters: ServerName (optional), Classification (optional)
+// Parameters: ServerName (optional), ClassificationParam (optional)
 let ServerName = "{server_name}";
-let Classification = "{classification}"; // "Critical", "Security", "" for all
+let ClassificationParam = "{classification}"; // "Critical", "Security Updates", "" for all
 Update
 | where TimeGenerated >= ago(7d)
 | where UpdateState == "Needed"
 | where Computer == iff(isempty(ServerName), Computer, ServerName)
-| where iff(isempty(Classification), true, Classification == "{classification}")
+| where iff(isempty(ClassificationParam), true, Classification == ClassificationParam)
 | summarize 
     MissingPatches = count(),
     CriticalCount = countif(MSRCSeverity == "Critical"),

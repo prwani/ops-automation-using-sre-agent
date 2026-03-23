@@ -5,9 +5,9 @@ from typing import Any
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from ..auth import require_role
-from ..cosmos_client import get_cosmos_client
-from ..config import settings
+from auth import require_role
+from cosmos_client import get_cosmos_client
+from config import settings
 
 router = APIRouter(tags=["memories"])
 
@@ -44,7 +44,14 @@ async def list_memories(
         conditions.append("AND c.status = @status")
         parameters.append({"name": "@status", "value": status})
     query = " ".join(conditions) + " ORDER BY c._ts DESC"
-    return [item async for item in container.query_items(query=query, parameters=parameters)]
+    return [
+        item
+        async for item in container.query_items(
+            query=query,
+            parameters=parameters,
+            partition_key=user_id,
+        )
+    ]
 
 
 @router.post("/memories", status_code=201)
@@ -90,12 +97,10 @@ async def update_memory(
     client = get_cosmos_client()
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("memories")
-    query = "SELECT * FROM c WHERE c.id = @id AND c.userId = @userId"
-    params = [{"name": "@id", "value": memory_id}, {"name": "@userId", "value": user_id}]
-    items = [item async for item in container.query_items(query=query, parameters=params)]
-    if not items:
+    try:
+        doc = await container.read_item(item=memory_id, partition_key=user_id)
+    except Exception:
         raise HTTPException(status_code=404, detail="Memory not found")
-    doc = items[0]
     if body.instruction is not None:
         doc["instruction"] = body.instruction
     if body.status is not None:
@@ -110,16 +115,14 @@ async def update_memory(
 @router.delete("/memories/{memory_id}", status_code=204)
 async def delete_memory(
     memory_id: str,
-    user: dict = Depends(require_role("Admin")),
+    user: dict = Depends(require_role("Operator")),
 ) -> None:
-    """Delete a memory (Admin only)."""
+    """Delete a memory. Users can only delete their own memories."""
     user_id = user.get("preferred_username", user.get("oid", "unknown"))
     client = get_cosmos_client()
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("memories")
-    query = "SELECT * FROM c WHERE c.id = @id AND c.userId = @userId"
-    params = [{"name": "@id", "value": memory_id}, {"name": "@userId", "value": user_id}]
-    items = [item async for item in container.query_items(query=query, parameters=params)]
-    if not items:
+    try:
+        await container.delete_item(item=memory_id, partition_key=user_id)
+    except Exception:
         raise HTTPException(status_code=404, detail="Memory not found")
-    await container.delete_item(item=memory_id, partition_key=user_id)

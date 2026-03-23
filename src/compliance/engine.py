@@ -23,9 +23,11 @@ class ComplianceEngine:
         self,
         defender_adapter: DefenderAdapterBase,
         cosmos_client: Any,
+        cosmos_database: str = "ops-automation",
     ) -> None:
         self._defender = defender_adapter
         self._cosmos = cosmos_client
+        self._cosmos_database = cosmos_database
 
     async def run_daily_report(self, subscription_id: str) -> dict[str, Any]:
         """Collect compliance data and build the full daily report document."""
@@ -128,7 +130,11 @@ class ComplianceEngine:
                 f"AND c.timestamp < '{cutoff.isoformat()}' "
                 "ORDER BY c.timestamp DESC"
             )
-            container = self._cosmos.get_container_client("compliance-runs")
+            container = (
+                self._cosmos
+                .get_database_client(self._cosmos_database)
+                .get_container_client("compliance-runs")
+            )
             items = list(container.query_items(query=query, enable_cross_partition_query=True))
         except Exception as exc:
             log.warning("compliance.calculate_trend.error", error=str(exc))

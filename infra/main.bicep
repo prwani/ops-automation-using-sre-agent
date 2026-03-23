@@ -11,9 +11,6 @@ param projectPrefix string = 'opsauto'
 @description('Azure subscription ID for Arc-enrolled servers')
 param arcSubscriptionId string = subscription().subscriptionId
 
-@description('Log Analytics Workspace ID (if ArcBox already has one, reference it)')
-param existingLogAnalyticsWorkspaceId string = ''
-
 var suffix = '${projectPrefix}-${environment}'
 var tags = {
   project: 'ops-automation-using-sre-agent'
@@ -201,7 +198,7 @@ resource portalApi 'Microsoft.Web/sites@2023-12-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'PYTHON|3.11'
-      appCommandLine: 'uvicorn portal_api.main:app --host 0.0.0.0 --port 8000'
+      appCommandLine: 'uvicorn main:app --host 0.0.0.0 --port 8000'
       appSettings: [
         {
           name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
@@ -294,25 +291,26 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
-// RBAC: Function App identity → Cosmos DB Contributor
-resource cosmosRoleAssignmentFn 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(cosmosAccount.id, functionApp.id, 'CosmosContributor')
-  scope: cosmosAccount
+// Cosmos SQL RBAC: Function App identity → Cosmos DB Built-in Data Contributor
+// Uses Cosmos-native SQL RBAC (data-plane), not ARM RBAC (management-plane)
+resource cosmosSqlRoleAssignmentFn 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2022-08-15' = {
+  name: guid(cosmosAccount.id, functionApp.id, 'CosmosSqlDataContributor')
+  parent: cosmosAccount
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00000000-0000-0000-0000-000000000002')
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
     principalId: functionApp.identity.principalId
-    principalType: 'ServicePrincipal'
+    scope: cosmosAccount.id
   }
 }
 
-// RBAC: Portal API identity → Cosmos DB Contributor
-resource cosmosRoleAssignmentApi 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(cosmosAccount.id, portalApi.id, 'CosmosContributor')
-  scope: cosmosAccount
+// Cosmos SQL RBAC: Portal API identity → Cosmos DB Built-in Data Contributor
+resource cosmosSqlRoleAssignmentApi 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2022-08-15' = {
+  name: guid(cosmosAccount.id, portalApi.id, 'CosmosSqlDataContributor')
+  parent: cosmosAccount
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00000000-0000-0000-0000-000000000002')
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
     principalId: portalApi.identity.principalId
-    principalType: 'ServicePrincipal'
+    scope: cosmosAccount.id
   }
 }
 

@@ -40,6 +40,7 @@ def health_check(timer: func.TimerRequest) -> None:
         arc_adapter=arc_adapter,
         log_analytics_client=logs_client,
         cosmos_client=cosmos_client,
+        workspace_id=os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", ""),
     )
 
     import asyncio

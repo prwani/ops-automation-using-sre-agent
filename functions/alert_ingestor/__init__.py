@@ -13,8 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.adapters.factory import get_defender_adapter, get_itsm_adapter
 from src.alerting.ingestor import AlertIngestor
 
+app = func.FunctionApp()
 
-@func.timer_trigger(
+
+@app.timer_trigger(
     schedule="0 */5 * * * *",
     arg_name="timer",
     run_on_startup=False,
@@ -29,12 +31,14 @@ def alert_ingestor(timer: func.TimerRequest) -> None:
         url=os.environ["COSMOS_ENDPOINT"],
         credential=credential,
     )
+    cosmos_database = os.environ.get("COSMOS_DATABASE", "ops-automation")
 
     ingestor = AlertIngestor(
         defender_adapter=get_defender_adapter(),
         itsm_adapter=get_itsm_adapter(),
         cosmos_client=cosmos_client,
         subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+        cosmos_database=cosmos_database,
         sre_agent_url=os.environ.get("SRE_AGENT_WEBHOOK_URL", ""),
     )
 

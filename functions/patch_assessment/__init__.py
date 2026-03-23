@@ -14,8 +14,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.adapters.factory import get_arc_adapter, get_itsm_adapter, get_patch_adapter
 from src.patching.orchestrator import PatchOrchestrator
 
+app = func.FunctionApp()
 
-@func.timer_trigger(
+
+@app.timer_trigger(
     schedule="0 0 10 15 * *",
     arg_name="timer",
     run_on_startup=False,
@@ -30,6 +32,7 @@ def patch_assessment(timer: func.TimerRequest) -> None:
         url=os.environ["COSMOS_ENDPOINT"],
         credential=credential,
     )
+    cosmos_database = os.environ.get("COSMOS_DATABASE", "ops-automation")
 
     arc_adapter = get_arc_adapter()
     orchestrator = PatchOrchestrator(
@@ -37,6 +40,7 @@ def patch_assessment(timer: func.TimerRequest) -> None:
         arc_adapter=arc_adapter,
         itsm_adapter=get_itsm_adapter(),
         cosmos_client=cosmos_client,
+        cosmos_database=cosmos_database,
     )
 
     import asyncio
@@ -47,8 +51,14 @@ def patch_assessment(timer: func.TimerRequest) -> None:
         return await orchestrator.run_monthly_assessment(server_ids=server_ids)
 
     result = asyncio.run(_run())
+    servers_assessed = len(result.get("servers", {}))
+    total_missing = sum(
+        v.get("patch_count", 0)
+        for v in result.get("servers", {}).values()
+        if isinstance(v, dict) and "error" not in v
+    )
     logging.info(
         "Patch assessment complete. Servers assessed: %d, Total missing patches: %d",
-        result.get("servers_assessed", 0),
-        result.get("total_missing_patches", 0),
+        servers_assessed,
+        total_missing,
     )

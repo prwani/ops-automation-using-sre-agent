@@ -2,10 +2,10 @@
 
 from datetime import date
 from typing import Any
-from fastapi import APIRouter, Depends, Query
-from ..auth import require_role
-from ..cosmos_client import get_cosmos_client
-from ..config import settings
+from fastapi import APIRouter, Depends, HTTPException, Query
+from auth import require_role
+from cosmos_client import get_cosmos_client
+from config import settings
 
 router = APIRouter(tags=["runs"])
 
@@ -36,7 +36,14 @@ async def list_runs(
         parameters.append({"name": "@partitionKey", "value": run_date.isoformat()})
     query = " ".join(conditions) + f" ORDER BY c._ts DESC OFFSET 0 LIMIT {limit}"
 
-    return [item async for item in container.query_items(query=query, parameters=parameters)]
+    return [
+        item
+        async for item in container.query_items(
+            query=query,
+            parameters=parameters,
+            enable_cross_partition_query=True,
+        )
+    ]
 
 
 @router.get("/runs/{run_id}")
@@ -45,14 +52,18 @@ async def get_run(
     user: dict = Depends(require_role("Viewer")),
 ) -> dict[str, Any]:
     """Get a specific run by ID."""
-    from fastapi import HTTPException
     client = get_cosmos_client()
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("runs")
     query = "SELECT * FROM c WHERE c.id = @id"
-    items = [item async for item in container.query_items(
-        query=query, parameters=[{"name": "@id", "value": run_id}]
-    )]
+    items = [
+        item
+        async for item in container.query_items(
+            query=query,
+            parameters=[{"name": "@id", "value": run_id}],
+            enable_cross_partition_query=True,
+        )
+    ]
     if not items:
         raise HTTPException(status_code=404, detail="Run not found")
     return items[0]
