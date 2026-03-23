@@ -177,8 +177,8 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   tags: tags
   kind: 'linux'
   sku: {
-    name: 'B1'
-    tier: 'Basic'
+    name: 'F1'
+    tier: 'Free'
   }
   properties: {
     reserved: true
