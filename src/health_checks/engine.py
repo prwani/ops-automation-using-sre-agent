@@ -27,6 +27,8 @@ class HealthCheckThresholds:
     cpu_critical: int = 95
     mem_warn: int = 85
     mem_critical: int = 95
+    event_log_warn: int = 1
+    event_log_critical: int = 10
 
 
 class HealthStatus(str, Enum):
@@ -209,9 +211,10 @@ class HealthCheckEngine:
             logs = [logs]
 
         total_errors = sum(entry.get("ErrorCount", 0) for entry in logs)
-        if total_errors > 10:
+        t = self._thresholds
+        if total_errors >= t.event_log_critical:
             status = HealthStatus.CRITICAL
-        elif total_errors > 0:
+        elif total_errors >= t.event_log_warn:
             status = HealthStatus.WARNING
         else:
             status = HealthStatus.HEALTHY

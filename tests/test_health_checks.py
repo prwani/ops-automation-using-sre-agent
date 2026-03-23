@@ -163,7 +163,7 @@ async def test_server_unreachable_returns_unknown():
 
 @pytest.mark.asyncio
 async def test_memory_suppression_rule_applied():
-    """A suppression that caps severity at WARNING should downgrade CRITICAL disk → WARNING."""
+    """A disk suppression capping max_severity at WARNING should downgrade CRITICAL disk → WARNING."""
     server = _make_server()
     suppressions = {
         server.server_id: {

@@ -45,7 +45,7 @@ class ComplianceEngine:
 
         summary = self._build_summary(secure_score, framework_results)
         failing_controls = self.get_failing_controls(framework_results, top_n=10)
-        trend = await self.calculate_trend(subscription_id, days=7)
+        trend = await self.calculate_trend(subscription_id, days=7, current_score=secure_score)
 
         report: dict[str, Any] = {
             "run_id": f"compliance-{now.strftime('%Y%m%d-%H%M%S')}",
@@ -117,8 +117,8 @@ class ComplianceEngine:
         failing.sort(key=lambda x: x["failed_resources"], reverse=True)
         return failing[:top_n]
 
-    async def calculate_trend(self, subscription_id: str, days: int = 7) -> dict[str, Any]:
-        """Compare today's score against N days ago using Cosmos DB history."""
+    async def calculate_trend(self, subscription_id: str, days: int = 7, current_score: float | None = None) -> dict[str, Any]:
+        """Compare current score against N days ago using Cosmos DB history."""
         log.info("compliance.calculate_trend", days=days)
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         try:
@@ -138,4 +138,5 @@ class ComplianceEngine:
             return {"days": days, "baseline_score": None, "delta": None}
 
         baseline = items[0].get("secure_score")
-        return {"days": days, "baseline_score": baseline}
+        delta = round(current_score - baseline, 2) if current_score is not None and baseline is not None else None
+        return {"days": days, "baseline_score": baseline, "delta": delta}
