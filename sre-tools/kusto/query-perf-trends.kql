@@ -1,0 +1,23 @@
+// query-perf-trends — CPU/memory/disk performance trends
+// Parameters: ServerName (string), MetricName (string: "cpu"|"memory"|"disk"), HoursBack (int)
+// Usage: Parameterized via SRE Agent tool wrapper
+let ServerName = "{server_name}";
+let MetricName = "{metric_name}"; // "cpu", "memory", or "disk"
+let HoursBack = {hours_back};
+let startTime = ago(totimespan(strcat(tostring(HoursBack), "h")));
+Perf
+| where TimeGenerated >= startTime
+| where Computer == ServerName
+| where case(
+    MetricName == "cpu", ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total",
+    MetricName == "memory", ObjectName == "Memory" and CounterName == "% Committed Bytes In Use",
+    MetricName == "disk", ObjectName == "LogicalDisk" and CounterName == "% Free Space" and InstanceName == "C:",
+    false
+  )
+| summarize 
+    AvgValue = round(avg(CounterValue), 1),
+    MaxValue = round(max(CounterValue), 1),
+    MinValue = round(min(CounterValue), 1),
+    P95Value = round(percentile(CounterValue, 95), 1)
+  by bin(TimeGenerated, 1h), Computer, CounterName
+| order by TimeGenerated asc

@@ -1,0 +1,20 @@
+// query-security-alerts — Defender for Cloud security alerts
+// Parameters: ServerName (optional string), Severity (optional: "High"|"Medium"|"Low"), HoursBack (int)
+let ServerName = "{server_name}";  // empty string = all servers
+let Severity = "{severity}";       // empty string = all severities
+let HoursBack = {hours_back};
+SecurityAlert
+| where TimeGenerated >= ago(totimespan(strcat(tostring(HoursBack), "h")))
+| where AlertSeverity == iff(isempty(Severity), AlertSeverity, Severity)
+| where Entities has iff(isempty(ServerName), "", ServerName) or isempty(ServerName)
+| project
+    TimeGenerated,
+    AlertName,
+    AlertSeverity,
+    Description,
+    RemediationSteps,
+    Entities,
+    ProviderName,
+    Status
+| order by TimeGenerated desc
+| take 100

@@ -1,0 +1,15 @@
+// query-update-compliance — Missing patches by server
+// Parameters: ServerName (optional), Classification (optional)
+let ServerName = "{server_name}";
+let Classification = "{classification}"; // "Critical", "Security", "" for all
+Update
+| where TimeGenerated >= ago(7d)
+| where UpdateState == "Needed"
+| where Computer == iff(isempty(ServerName), Computer, ServerName)
+| where iff(isempty(Classification), true, Classification == "{classification}")
+| summarize 
+    MissingPatches = count(),
+    CriticalCount = countif(MSRCSeverity == "Critical"),
+    SecurityCount = countif(Classification == "Security Updates")
+  by Computer, Classification
+| order by CriticalCount desc, MissingPatches desc

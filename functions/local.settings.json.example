@@ -1,0 +1,17 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "AZURE_SUBSCRIPTION_ID": "<your-subscription-id>",
+    "AZURE_RESOURCE_GROUP": "<arcbox-resource-group>",
+    "LOG_ANALYTICS_WORKSPACE_ID": "<workspace-id>",
+    "COSMOS_ENDPOINT": "https://<account>.documents.azure.com:443/",
+    "COSMOS_DATABASE": "ops-automation",
+    "GLPI_BASE_URL": "http://localhost:8080/apirest.php",
+    "GLPI_APP_TOKEN": "<glpi-app-token>",
+    "GLPI_USER_TOKEN": "<glpi-user-token>",
+    "SRE_AGENT_WEBHOOK_URL": "<sre-agent-webhook-url>",
+    "APPINSIGHTS_INSTRUMENTATIONKEY": "<app-insights-key>"
+  }
+}

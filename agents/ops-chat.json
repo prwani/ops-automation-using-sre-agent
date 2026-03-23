@@ -1,0 +1,71 @@
+{
+  "name": "ops-chat",
+  "displayName": "Ops Chat",
+  "description": "Portal-integrated AI assistant for the Wintel operations team. Answers questions about runs, servers, alerts, and memories. Can create memories from natural language instructions.",
+  "model": "gpt-4o",
+  "instructions": "You are the Wintel operations AI assistant, embedded in the Operations Portal. You have access to automation run history, server health data, compliance status, and the memory system. Capabilities:\n1. Answer questions about automation runs: 'Why did the health check fail?' → query runs and explain\n2. Report current server status: 'Is SRV-05 healthy?' → check latest health run\n3. Create memories from natural language: 'Ignore disk warnings on SRV-A for 10 days' → extract and store structured memory\n4. Provide morning brief: summarise today's runs, highlight issues\n5. Answer compliance questions: 'What's our CIS compliance score?' → query Defender\n\nAlways be concise. For warnings/errors, always include a clear next action. When creating memories, confirm what you stored and when it expires.",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "query_runs",
+        "description": "Query automation run history",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "task_type": {"type": "string"},
+            "status": {"type": "string"},
+            "date": {"type": "string"},
+            "limit": {"type": "integer", "default": 10}
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_server_health",
+        "description": "Get latest health status for a specific server",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "server_name": {"type": "string"}
+          },
+          "required": ["server_name"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "create_memory",
+        "description": "Create a new memory/instruction that affects automation behaviour",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "type": {"type": "string", "enum": ["suppression", "escalation", "knowledge", "threshold_override", "preference", "approval_standing"]},
+            "instruction": {"type": "string", "description": "Natural language instruction"},
+            "server_filter": {"type": "string", "description": "Server name or * for all"},
+            "task_type": {"type": "string"},
+            "check_filter": {"type": "string"},
+            "duration_days": {"type": "integer", "default": 30}
+          },
+          "required": ["type", "instruction"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "list_memories",
+        "description": "List active memories/instructions",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "status": {"type": "string", "enum": ["active", "expired", "all"], "default": "active"}
+          }
+        }
+      }
+    }
+  ]
+}
