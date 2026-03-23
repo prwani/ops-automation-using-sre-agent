@@ -1,0 +1,22 @@
+// query-compliance-state — Regulatory compliance status from Resource Graph
+// Executed against Azure Resource Graph (not Log Analytics)
+// Parameters: SubscriptionId, Standard (e.g. "CIS Windows Server 2022 Benchmark")
+SecurityResources
+| where type == "microsoft.security/regulatorycompliancestandards/regulatorycompliancecontrols/regulatorycomplianceassessments"
+| where subscriptionId == "{subscription_id}"
+| extend standard = tostring(properties.regulatoryComplianceStandardName)
+| where standard contains "{compliance_standard}"
+| extend 
+    controlId = tostring(properties.regulatoryComplianceControlId),
+    controlName = tostring(properties.description),
+    state = tostring(properties.state),
+    passedResources = toint(properties.passedResources),
+    failedResources = toint(properties.failedResources),
+    skippedResources = toint(properties.skippedResources)
+| where state == "Failed"
+| summarize
+    TotalFailedControls = count(),
+    TotalFailedResources = sum(failedResources)
+  by controlId, controlName, state, failedResources
+| order by failedResources desc
+| take 20

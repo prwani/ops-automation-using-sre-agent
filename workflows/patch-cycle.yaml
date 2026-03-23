@@ -1,0 +1,137 @@
+# Foundry Workflow: Patch Cycle
+# Pattern: Sequential with Human-in-the-loop approval
+name: patch-cycle
+displayName: Monthly Patch Cycle
+description: >
+  Orchestrates the monthly Windows patching process across all Arc-enrolled servers.
+  Includes AI risk assessment, mandatory approval gate, wave-based deployment, and post-patch validation.
+
+trigger:
+  type: schedule
+  # 15th of each month at 10:00 UTC (4 days after Patch Tuesday)
+  cron: "0 10 15 * *"
+
+inputs:
+  subscription_id:
+    type: string
+    description: Azure subscription ID containing Arc-enrolled servers
+  resource_group:
+    type: string
+    description: Resource group containing Arc-enrolled servers
+  require_approval:
+    type: boolean
+    default: true
+    description: Whether to require human approval before Wave 2/3
+
+steps:
+  - id: assess-patches
+    name: Run Patch Assessment
+    type: function
+    function: patch_assessment
+    inputs:
+      resource_group: ${{ inputs.resource_group }}
+    outputs:
+      - assessment_id
+      - total_missing_patches
+      - critical_count
+
+  - id: ai-risk-assessment
+    name: AI Patch Risk Assessment
+    type: agent
+    agent: patch-risk
+    inputs:
+      resource_group: ${{ inputs.resource_group }}
+      assessment_id: ${{ steps.assess-patches.outputs.assessment_id }}
+    outputs:
+      - risk_report
+      - wave_plan
+      - high_risk_servers
+
+  - id: approval-gate
+    name: Approval Gate — Review Risk Assessment
+    type: human_approval
+    condition: ${{ inputs.require_approval }}
+    message: |
+      Patch assessment complete. Review the AI risk report and approve to proceed.
+      
+      Critical patches: ${{ steps.assess-patches.outputs.critical_count }}
+      Total missing patches: ${{ steps.assess-patches.outputs.total_missing_patches }}
+      High-risk servers: ${{ steps.ai-risk-assessment.outputs.high_risk_servers }}
+      
+      Review full report: ${{ steps.ai-risk-assessment.outputs.risk_report }}
+    timeout_hours: 48
+
+  - id: wave1-dev-test
+    name: Wave 1 — Dev/Test Servers
+    type: function
+    function: patch_deploy_wave
+    inputs:
+      wave: "dev-test"
+      wave_plan: ${{ steps.ai-risk-assessment.outputs.wave_plan }}
+    outputs:
+      - wave1_results
+
+  - id: wave1-validation
+    name: Validate Wave 1
+    type: function
+    function: patch_validate
+    inputs:
+      wave: "dev-test"
+      wave_plan: ${{ steps.ai-risk-assessment.outputs.wave_plan }}
+    outputs:
+      - validation_passed
+      - failures
+
+  - id: wave2-approval
+    name: Approval Gate — Wave 2 (Non-Critical Prod)
+    type: human_approval
+    condition: ${{ inputs.require_approval }}
+    message: |
+      Wave 1 (Dev/Test) complete. 
+      Status: ${{ steps.wave1-validation.outputs.validation_passed }}
+      Failures: ${{ steps.wave1-validation.outputs.failures }}
+      
+      Approve to proceed to Wave 2 (Non-Critical Production).
+    timeout_hours: 24
+
+  - id: wave2-prod
+    name: Wave 2 — Non-Critical Production
+    type: function
+    function: patch_deploy_wave
+    inputs:
+      wave: "non-critical-prod"
+      wave_plan: ${{ steps.ai-risk-assessment.outputs.wave_plan }}
+
+  - id: wave2-validation
+    name: Validate Wave 2
+    type: function
+    function: patch_validate
+    inputs:
+      wave: "non-critical-prod"
+      wave_plan: ${{ steps.ai-risk-assessment.outputs.wave_plan }}
+
+  - id: wave3-approval
+    name: Approval Gate — Wave 3 (Critical Production)
+    type: human_approval
+    message: |
+      Wave 2 (Non-Critical Prod) complete after 72-hour soak.
+      Approve to proceed to Wave 3 (Critical Production including DCs, SQL servers).
+    timeout_hours: 72
+
+  - id: wave3-critical
+    name: Wave 3 — Critical Production
+    type: function
+    function: patch_deploy_wave
+    inputs:
+      wave: "critical-prod"
+      wave_plan: ${{ steps.ai-risk-assessment.outputs.wave_plan }}
+
+  - id: final-validation
+    name: Final Validation & Report
+    type: agent
+    agent: health-insights
+    inputs:
+      context: "post-patch-validation"
+      wave_plan: ${{ steps.ai-risk-assessment.outputs.wave_plan }}
+    outputs:
+      - final_report

@@ -1,0 +1,83 @@
+# Foundry Workflow: Daily Brief
+# Pattern: Concurrent data collection → Sequential AI summary
+name: daily-brief
+displayName: Daily Operations Brief
+description: >
+  Runs health check, compliance pull, and alert summary concurrently then 
+  synthesises them into a single morning brief via the Health Insights agent.
+
+trigger:
+  type: schedule
+  cron: "0 7 * * *"  # 07:00 UTC daily
+
+inputs:
+  subscription_id:
+    type: string
+  resource_group:
+    type: string
+
+steps:
+  # Concurrent data collection phase
+  - id: collect-data
+    name: Collect All Data (Concurrent)
+    type: parallel
+    branches:
+      - id: health-data
+        name: Latest Health Check Results
+        type: function
+        function: get_health_summary
+        inputs:
+          date: today
+
+      - id: compliance-data
+        name: Latest Compliance Status
+        type: function
+        function: get_compliance_summary
+        inputs:
+          subscription_id: ${{ inputs.subscription_id }}
+
+      - id: alert-data
+        name: Overnight Alerts
+        type: function
+        function: get_alerts_summary
+        inputs:
+          hours_back: 12
+
+      - id: patch-data
+        name: Patch Status
+        type: function
+        function: get_patch_summary
+        inputs:
+          resource_group: ${{ inputs.resource_group }}
+
+  # Sequential synthesis phase
+  - id: generate-brief
+    name: Generate Morning Brief
+    type: agent
+    agent: health-insights
+    inputs:
+      health_summary: ${{ steps.collect-data.health-data.outputs }}
+      compliance_summary: ${{ steps.collect-data.compliance-data.outputs }}
+      alert_summary: ${{ steps.collect-data.alert-data.outputs }}
+      patch_summary: ${{ steps.collect-data.patch-data.outputs }}
+    outputs:
+      - brief_markdown
+      - action_items
+      - estate_health_pct
+
+  - id: store-brief
+    name: Store Brief in Cosmos DB
+    type: function
+    function: store_daily_brief
+    inputs:
+      brief: ${{ steps.generate-brief.outputs.brief_markdown }}
+      action_items: ${{ steps.generate-brief.outputs.action_items }}
+      estate_health_pct: ${{ steps.generate-brief.outputs.estate_health_pct }}
+
+  - id: notify
+    name: Send to Portal
+    type: function
+    function: notify_portal
+    inputs:
+      event: "daily_brief_ready"
+      brief_id: ${{ steps.store-brief.outputs.brief_id }}

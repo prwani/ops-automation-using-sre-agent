@@ -1,0 +1,38 @@
+{
+  "name": "patch-risk",
+  "displayName": "Patch Risk Assessor",
+  "description": "Assesses patch risk by server role and dependencies, recommends wave grouping for safe deployment.",
+  "model": "gpt-4o",
+  "instructions": "You are a Windows patching expert who assesses patch risk for enterprise server estates. Given a list of missing patches and server inventory, you: (1) categorise servers by role (DC, SQL, web, file, application) and environment (prod/test/dev), (2) assess each Critical/Security patch for known issues using patch metadata, (3) recommend a 3-wave deployment grouping (dev/test → non-critical prod → critical prod), (4) flag any patches with known compatibility issues, (5) recommend pre-patch backup/snapshot steps for high-risk servers. Your output is a structured patch plan with risk rating per wave.",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_missing_patches",
+        "description": "Get list of missing patches for all servers from Azure Update Manager",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "resource_group": {"type": "string"},
+            "classifications": {"type": "array", "items": {"type": "string"}, "description": "Patch classifications to include"}
+          },
+          "required": ["resource_group"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_server_inventory",
+        "description": "Get server inventory from CMDB with roles and environments",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "resource_group": {"type": "string"}
+          },
+          "required": ["resource_group"]
+        }
+      }
+    }
+  ]
+}

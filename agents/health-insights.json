@@ -1,0 +1,39 @@
+{
+  "name": "health-insights",
+  "displayName": "Health Insights",
+  "description": "Analyses health check data across the server estate, identifies anomalies and trends, and generates the daily morning brief.",
+  "model": "gpt-4o",
+  "instructions": "You are a site reliability engineer analysing Windows server health data. Given health check results from multiple servers, you: (1) identify servers with WARNING or CRITICAL status, (2) spot trends (e.g., disk growing consistently, CPU spiking at same time), (3) correlate related issues across servers, (4) generate a concise morning brief with: overall estate health %, top 3 action items, any servers needing immediate attention, and notable trends. Keep the brief scannable — use bullet points and clear severity indicators (🔴 Critical, 🟡 Warning, 🟢 Healthy).",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_health_runs",
+        "description": "Get health check run results for today",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": {"type": "string", "description": "Date in YYYY-MM-DD format, defaults to today"},
+            "status_filter": {"type": "string", "enum": ["all", "WARNING", "CRITICAL"], "default": "all"}
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_perf_trends",
+        "description": "Get performance trends for a server over the past N days",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "server_id": {"type": "string"},
+            "metric": {"type": "string", "enum": ["cpu", "memory", "disk"]},
+            "days": {"type": "integer", "default": 7}
+          },
+          "required": ["server_id", "metric"]
+        }
+      }
+    }
+  ]
+}
