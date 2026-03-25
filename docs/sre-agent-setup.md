@@ -18,33 +18,26 @@ Step-by-step guide to deploy and configure Azure SRE Agent for the Wintel Ops Au
    - **Region:** `Sweden Central` (same as ArcBox)
 4. Click **Create** — this provisions a Container App + managed identity automatically
 
-## Step 2: Grant RBAC Permissions
+## Step 2: Add Managed Resource Groups
 
-After creation, find the agent's managed identity ID in **Settings → Azure settings → Go to Identity**.
+Instead of manual RBAC commands, add resource groups directly in the SRE Agent setup. The agent auto-assigns Reader, Log Analytics Reader, and Monitoring Reader roles to its managed identity.
 
-```bash
-# Grant Contributor on ArcBox resource group (for Arc Run Commands + remediation)
-az role assignment create \
-  --assignee <SRE_AGENT_MANAGED_IDENTITY_ID> \
-  --role Contributor \
-  --scope /subscriptions/31adb513-7077-47bb-9567-8e9d2a462bcf/resourceGroups/rg-arcbox-itpro
+1. In the SRE Agent portal, go to **Settings → Azure settings**
+2. Click **Add resource group**
+3. Add both resource groups:
 
-# Grant Reader on solution resource group (for Cosmos DB, alerts)
-az role assignment create \
-  --assignee <SRE_AGENT_MANAGED_IDENTITY_ID> \
-  --role Reader \
-  --scope /subscriptions/31adb513-7077-47bb-9567-8e9d2a462bcf/resourceGroups/rg-opsauto-sc
+| Resource Group | Purpose |
+|---|---|
+| `rg-arcbox-itpro` | ArcBox VMs + Arc-enrolled servers + Log Analytics |
+| `rg-opsauto-sc` | Solution stack (Cosmos DB, Functions, Portal API, alerts) |
 
-# Grant Log Analytics Reader on the ArcBox workspace
-az role assignment create \
-  --assignee <SRE_AGENT_MANAGED_IDENTITY_ID> \
-  --role "Log Analytics Reader" \
-  --scope /subscriptions/31adb513-7077-47bb-9567-8e9d2a462bcf/resourceGroups/rg-arcbox-itpro/providers/Microsoft.OperationalInsights/workspaces/law-arcbox-itpro-sc
-```
+4. Click **Save**
 
-Verify: In the SRE Agent chat, type `list my resources` — you should see ArcBox-Client (Azure VM) plus all 5 Arc-enrolled servers.
+The agent now has read access to all resources in both groups. For **write operations** (Arc Run Commands, remediation), you can either:
+- Grant Contributor manually via CLI if needed for specific actions
+- Or use the **on-behalf-of (OBO)** flow — the agent prompts you for approval when it needs elevated permissions
 
-> **Note:** If you only see ArcBox-Client, ensure the nested VMs are running. The Arc servers are `Microsoft.HybridCompute/machines` — ask the agent: *"What Arc-enabled servers are in resource group rg-arcbox-itpro?"*
+Verify: In the SRE Agent chat, ask *"What Arc-enabled servers are in resource group rg-arcbox-itpro?"* — you should see all 5 Arc servers.
 
 > **Note:** If ArcBox-Client was deallocated (auto-shutdown), start it first: `az vm start --resource-group rg-arcbox-itpro --name ArcBox-Client`. Wait 3-5 minutes for nested VMs to boot and Arc agents to reconnect. Disable auto-shutdown during setup: `az vm auto-shutdown --resource-group rg-arcbox-itpro --name ArcBox-Client --off`
 
