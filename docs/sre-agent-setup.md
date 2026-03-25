@@ -151,45 +151,70 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 
 > **Tip:** Enable the **Quickstart response plan** when connecting Azure Monitor for an immediate default (Sev3 = autonomous). Then customize with the plans above.
 
-## Step 6: Create Custom Tools
+## Step 6: Set Up Kusto Connector + Create Custom Tools
 
-### 6a: Kusto Tools
+### 6a: Configure Kusto Connector (Required before creating Kusto tools)
 
-Go to **Builder → Tools → Create tool → Kusto**
+The Kusto connector lets your agent run KQL queries against your Log Analytics workspace. You must set this up **before** creating Kusto tools.
 
-| Tool Name | KQL Query File | Target |
-|---|---|---|
-| `query-perf-trends` | `sre-tools/kusto/query-perf-trends.kql` | law-arcbox-itpro-sc |
-| `query-security-alerts` | `sre-tools/kusto/query-security-alerts.kql` | law-arcbox-itpro-sc |
-| `query-compliance-state` | `sre-tools/kusto/query-compliance-state.kql` | law-arcbox-itpro-sc |
-| `query-update-compliance` | `sre-tools/kusto/query-update-compliance.kql` | law-arcbox-itpro-sc |
+1. Go to **Builder → Connectors**
+2. Click **Azure Data Explorer (Kusto)**
+3. Select **Database query connector** (for predefined queries, not schema learning)
+4. Configure:
 
-For each:
-1. Click **Create tool → Kusto**
-2. Enter the tool name
-3. Paste the KQL query from the corresponding `.kql` file
-4. Set the target workspace to `law-arcbox-itpro-sc`
-5. Define parameters (e.g., `server_name`, `time_range`) as specified in the query comments
-6. Save
+| Setting | Value |
+|---|---|
+| Connection name | `law-arcbox` |
+| Cluster URL | `https://ade.loganalytics.io/subscriptions/31adb513-7077-47bb-9567-8e9d2a462bcf/resourcegroups/rg-arcbox-itpro/providers/microsoft.operationalinsights/workspaces/law-arcbox-itpro-sc` |
+| Database | `law-arcbox-itpro-sc` |
 
-### 6b: Python Tools
+> **Note:** For Log Analytics workspaces, use the ADX proxy URL format: `https://ade.loganalytics.io/subscriptions/{sub}/resourcegroups/{rg}/providers/microsoft.operationalinsights/workspaces/{workspace}`. This lets you query Log Analytics data using standard KQL via the ADX interface.
 
-Go to **Builder → Tools → Create tool → Python**
+5. The agent's managed identity should already have **Log Analytics Reader** via the managed resource group (Step 2). If not, grant it manually.
+6. Click **Test connection** to verify
+7. Click **Save**
 
-| Tool Name | Source File | Purpose |
-|---|---|---|
-| `glpi-create-ticket` | `sre-tools/python/glpi_tools.py` (create_ticket function) | Create GLPI incident |
-| `glpi-query-cmdb` | `sre-tools/python/glpi_tools.py` (query_cmdb function) | Query CMDB for server info |
-| `cosmos-query-runs` | `sre-tools/python/cosmos_tools.py` (query_runs function) | Query automation run history |
-| `cosmos-check-memories` | `sre-tools/python/cosmos_tools.py` (check_memories function) | Check active suppression rules |
+### 6b: Create Kusto Tools
 
-For each:
-1. Click **Create tool → Python**
+Now create parameterized KQL tools. Go to **Builder → Subagent builder → Create → Tool → Kusto tool**
+
+For each tool:
+1. Set the **Connector** to `law-arcbox`
+2. Paste the KQL query from the repo file
+3. Use `##paramName##` syntax for parameters (the agent auto-substitutes based on user input)
+
+| Tool Name | Source File | Parameters | Description |
+|---|---|---|---|
+| `query-perf-trends` | `sre-tools/kusto/query-perf-trends.kql` | `##server_name##`, `##time_range##` | CPU/memory/disk trends over time |
+| `query-security-alerts` | `sre-tools/kusto/query-security-alerts.kql` | `##server_name##`, `##severity##` | Defender for Cloud security alerts |
+| `query-compliance-state` | `sre-tools/kusto/query-compliance-state.kql` | `##subscription_id##`, `##compliance_standard##` | Regulatory compliance from Resource Graph |
+| `query-update-compliance` | `sre-tools/kusto/query-update-compliance.kql` | `##server_name##` | Missing patches by classification |
+
+> **Tip:** Test each query in the portal before saving. The portal validates it against your workspace and shows execution time.
+
+> **Note:** `query-compliance-state` queries Azure Resource Graph, not Log Analytics. You may need a separate connector for Resource Graph, or use `RunAzCliReadCommands` (built-in) with `az graph query` instead.
+
+### 6c: Create Python Tools
+
+Go to **Builder → Subagent builder → Create → Tool → Python tool**
+
+Each tool must follow the SRE Agent pattern: a `main()` function with typed parameters returning a `dict`. See [Python tools docs](https://learn.microsoft.com/en-us/azure/sre-agent/python-code-execution).
+
+| Tool Name | Description | Source | Parameters |
+|---|---|---|---|
+| `glpi-create-ticket` | Create an incident ticket in GLPI | `sre-tools/python/glpi_tools.py` (first `main()`) | `title` (str), `description` (str), `priority` (str) |
+| `glpi-query-cmdb` | Query GLPI CMDB for server CI record | `sre-tools/python/glpi_tools.py` (second `main()`) | `server_name` (str) |
+| `cosmos-query-runs` | Query automation run history | `sre-tools/python/cosmos_tools.py` (first `main()`) | `date` (str), `task_type` (str) |
+| `cosmos-check-memories` | Check active suppression rules | `sre-tools/python/cosmos_tools.py` (second `main()`) | `server_name` (str), `task_type` (str) |
+
+For each tool:
+1. Click **Create → Tool → Python tool**
 2. Enter the tool name and description
-3. Paste the function code from the source file
-4. Add pip dependencies: `httpx` (for GLPI), `azure-cosmos` (for Cosmos)
-5. Define input parameters
-6. Save
+3. Paste the `main()` function code from the source file
+4. Click **Test** with sample inputs to verify
+5. Click **Create tool**
+
+> **Note:** Each `.py` file contains multiple tool functions. Create each as a **separate** Python tool — paste only the relevant `main()` function for each tool.
 
 ## Step 7: Build Custom Subagents
 

@@ -1,18 +1,130 @@
-"""GLPI tools for SRE Agent — ticket creation and CMDB queries."""
+"""GLPI tools for SRE Agent — each function follows the SRE Agent Python tool pattern.
 
-import os
-from typing import Any
+SRE Agent Python tools require:
+- A main() function with typed parameters
+- JSON-serializable return values
+- No persistent state between calls
 
-import httpx
-import structlog
+Create each function as a SEPARATE Python tool in Builder > Tools > Python.
+"""
 
-log = structlog.get_logger()
+# ============================================================
+# Tool 1: glpi-create-ticket
+# Description: Create an incident ticket in GLPI ITSM
+# ============================================================
 
 
-class GlpiTools:
-    """GLPI REST API tools for SRE Agent."""
+def main(title: str, description: str, priority: str = "3") -> dict:
+    """Create an incident ticket in GLPI.
 
-    def __init__(self) -> None:
+    Args:
+        title: Ticket title (e.g., "[Compliance] CIS Control 1.1 — 3 servers affected")
+        description: Full description with remediation steps
+        priority: Priority 1-5 (1=very high, 5=very low). Default "3" (medium).
+    """
+    import requests
+
+    GLPI_URL = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php"
+    APP_TOKEN = "your-app-token"  # Set in GLPI: Setup > General > API
+    USER_TOKEN = "your-user-token"  # Set in GLPI: User preferences > API token
+
+    # Init session
+    resp = requests.get(
+        f"{GLPI_URL}/initSession",
+        headers={
+            "App-Token": APP_TOKEN,
+            "Authorization": f"user_token {USER_TOKEN}",
+        },
+    )
+    resp.raise_for_status()
+    session_token = resp.json()["session_token"]
+
+    # Create ticket
+    resp = requests.post(
+        f"{GLPI_URL}/Ticket",
+        json={
+            "input": {
+                "name": title,
+                "content": description,
+                "type": 1,  # Incident
+                "urgency": int(priority),
+                "impact": int(priority),
+                "priority": int(priority),
+            }
+        },
+        headers={
+            "App-Token": APP_TOKEN,
+            "Session-Token": session_token,
+            "Content-Type": "application/json",
+        },
+    )
+    resp.raise_for_status()
+    ticket_id = resp.json()["id"]
+
+    return {
+        "ticket_id": ticket_id,
+        "title": title,
+        "priority": priority,
+        "url": f"http://glpi-opsauto-demo.swedencentral.azurecontainer.io/front/ticket.form.php?id={ticket_id}",
+        "status": "created",
+    }
+
+
+# ============================================================
+# Tool 2: glpi-query-cmdb
+# Description: Query GLPI CMDB for a server CI record
+# ============================================================
+
+
+def main(server_name: str) -> dict:
+    """Query GLPI CMDB for server configuration item.
+
+    Args:
+        server_name: The server hostname to look up (e.g., "ArcBox-Win2K22")
+    """
+    import requests
+
+    GLPI_URL = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php"
+    APP_TOKEN = "your-app-token"
+    USER_TOKEN = "your-user-token"
+
+    # Init session
+    resp = requests.get(
+        f"{GLPI_URL}/initSession",
+        headers={
+            "App-Token": APP_TOKEN,
+            "Authorization": f"user_token {USER_TOKEN}",
+        },
+    )
+    resp.raise_for_status()
+    session_token = resp.json()["session_token"]
+
+    # Search for computer by name
+    resp = requests.get(
+        f"{GLPI_URL}/Computer",
+        params={"searchText[1]": server_name, "range": "0-5"},
+        headers={
+            "App-Token": APP_TOKEN,
+            "Session-Token": session_token,
+        },
+    )
+
+    if resp.status_code in (200, 206):
+        items = resp.json()
+        if items:
+            server = items[0]
+            return {
+                "found": True,
+                "ci_id": str(server.get("id")),
+                "name": server.get("name"),
+                "serial": server.get("serial"),
+                "os": server.get("operatingsystems_id"),
+                "location": server.get("locations_id"),
+                "state": server.get("states_id"),
+                "last_update": server.get("date_mod"),
+            }
+
+    return {"found": False, "server_name": server_name, "message": "Not found in CMDB"}
         self.base_url = os.environ["GLPI_BASE_URL"].rstrip("/")
         self.app_token = os.environ["GLPI_APP_TOKEN"]
         self.user_token = os.environ["GLPI_USER_TOKEN"]

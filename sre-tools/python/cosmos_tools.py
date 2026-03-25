@@ -1,94 +1,130 @@
-"""Cosmos DB tools for SRE Agent — run history and memory queries."""
+"""Cosmos DB tools for SRE Agent — each function follows the SRE Agent Python tool pattern.
 
-import os
-from datetime import datetime, timezone
-from typing import Any
+SRE Agent Python tools require:
+- A main() function with typed parameters
+- JSON-serializable return values
+- No persistent state between calls
 
-import structlog
-from azure.cosmos.aio import CosmosClient
-from azure.identity.aio import DefaultAzureCredential
+Create each function as a SEPARATE Python tool in Builder > Tools > Python.
+Enable Azure Identity in the Identity tab when creating each tool.
+"""
 
-log = structlog.get_logger()
+# ============================================================
+# Tool 1: cosmos-query-runs
+# Description: Query automation run history from Cosmos DB
+# Identity: Enable ARM scope (for managed identity auth)
+# ============================================================
 
 
-class CosmosTools:
-    """Cosmos DB query tools for SRE Agent."""
+def main(date: str = "", task_type: str = "", status: str = "") -> dict:
+    """Query automation run history from Cosmos DB.
 
-    def __init__(self) -> None:
-        self.endpoint = os.environ["COSMOS_ENDPOINT"]
-        self.database = os.environ.get("COSMOS_DATABASE", "ops-automation")
+    Args:
+        date: Filter by date (YYYY-MM-DD format, e.g. "2026-03-25"). Empty = all dates.
+        task_type: Filter by task type (e.g. "health_check", "compliance", "alert"). Empty = all.
+        status: Filter by status (e.g. "completed", "failed", "completed_with_warnings"). Empty = all.
+    """
+    from azure.cosmos import CosmosClient
+    from azure.identity import ManagedIdentityCredential
 
-    async def _get_client(self) -> CosmosClient:
-        credential = DefaultAzureCredential()
-        return CosmosClient(url=self.endpoint, credential=credential)
+    COSMOS_ENDPOINT = "https://cosmos-opsauto-dev-sc.documents.azure.com:443/"
+    DATABASE = "ops-automation"
 
-    async def query_runs(
-        self,
-        task_type: str | None = None,
-        status: str | None = None,
-        limit: int = 20,
-        date: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Query automation run history from Cosmos DB."""
-        conditions = ["SELECT * FROM c WHERE 1=1"]
-        parameters: list[dict[str, Any]] = []
-        if task_type:
-            conditions.append("AND c.taskType = @taskType")
-            parameters.append({"name": "@taskType", "value": task_type})
-        if status:
-            conditions.append("AND c.status = @status")
-            parameters.append({"name": "@status", "value": status})
-        if date:
-            conditions.append("AND c.partitionKey = @partitionKey")
-            parameters.append({"name": "@partitionKey", "value": date})
-        query = " ".join(conditions) + f" ORDER BY c._ts DESC OFFSET 0 LIMIT {limit}"
+    credential = ManagedIdentityCredential()
+    client = CosmosClient(url=COSMOS_ENDPOINT, credential=credential)
+    db = client.get_database_client(DATABASE)
+    container = db.get_container_client("runs")
 
-        async with await self._get_client() as client:
-            db = client.get_database_client(self.database)
-            container = db.get_container_client("runs")
-            items = [
-                item
-                async for item in container.query_items(
-                    query=query,
-                    parameters=parameters,
-                    enable_cross_partition_query=True,
-                )
-            ]
-            log.info("cosmos_runs_queried", count=len(items), task_type=task_type)
-            return items
+    conditions = ["SELECT TOP 20 * FROM c WHERE 1=1"]
+    params = []
+    if date:
+        conditions.append("AND c.partitionKey = @date")
+        params.append({"name": "@date", "value": date})
+    if task_type:
+        conditions.append("AND c.taskType = @taskType")
+        params.append({"name": "@taskType", "value": task_type})
+    if status:
+        conditions.append("AND c.status = @status")
+        params.append({"name": "@status", "value": status})
 
-    async def check_memories(
-        self,
-        server_id: str,
-        check_type: str | None = None,
-        user_id: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Check for active memory/suppression rules for a server."""
-        now = datetime.now(timezone.utc).isoformat()
-        query = """
-            SELECT * FROM c
-            WHERE c.status = 'active'
-            AND c.expiresAt > @now
-            AND (c.scope.serverFilter = @serverId OR c.scope.serverFilter = '*')
-        """
-        parameters: list[dict[str, Any]] = [
-            {"name": "@now", "value": now},
-            {"name": "@serverId", "value": server_id},
-        ]
-        if check_type:
-            query += " AND (c.scope.checkFilter = @checkType OR c.scope.checkFilter = '*')"
-            parameters.append({"name": "@checkType", "value": check_type})
+    query = " ".join(conditions) + " ORDER BY c._ts DESC"
 
-        async with await self._get_client() as client:
-            db = client.get_database_client(self.database)
-            container = db.get_container_client("memories")
-            items = [
-                item
-                async for item in container.query_items(
-                    query=query,
-                    parameters=parameters,
-                    enable_cross_partition_query=True,
-                )
-            ]
-            log.info("cosmos_memories_checked", server_id=server_id, count=len(items))
-            return items
+    items = list(container.query_items(
+        query=query, parameters=params, enable_cross_partition_query=True
+    ))
+
+    return {
+        "count": len(items),
+        "runs": [
+            {
+                "id": item.get("id"),
+                "taskType": item.get("taskType"),
+                "status": item.get("status"),
+                "summary": item.get("summary", ""),
+                "startedAt": item.get("startedAt"),
+                "durationSeconds": item.get("durationSeconds"),
+            }
+            for item in items
+        ],
+    }
+
+
+# ============================================================
+# Tool 2: cosmos-check-memories
+# Description: Check active memory/suppression rules for a server
+# Identity: Enable ARM scope (for managed identity auth)
+# ============================================================
+
+
+def main(server_name: str, task_type: str = "") -> dict:
+    """Check active memory/suppression rules for a server.
+
+    Args:
+        server_name: Server hostname (e.g. "ArcBox-Win2K22")
+        task_type: Optional task type filter (e.g. "health_check"). Empty = all tasks.
+    """
+    from datetime import datetime, timezone
+    from azure.cosmos import CosmosClient
+    from azure.identity import ManagedIdentityCredential
+
+    COSMOS_ENDPOINT = "https://cosmos-opsauto-dev-sc.documents.azure.com:443/"
+    DATABASE = "ops-automation"
+
+    credential = ManagedIdentityCredential()
+    client = CosmosClient(url=COSMOS_ENDPOINT, credential=credential)
+    db = client.get_database_client(DATABASE)
+    container = db.get_container_client("memories")
+
+    now = datetime.now(timezone.utc).isoformat()
+    query = """
+        SELECT * FROM c
+        WHERE c.status = 'active'
+        AND c.expiresAt > @now
+        AND (c.scope.serverFilter = @server OR c.scope.serverFilter = '*')
+    """
+    params = [
+        {"name": "@now", "value": now},
+        {"name": "@server", "value": server_name},
+    ]
+    if task_type:
+        query += " AND c.scope.taskType = @taskType"
+        params.append({"name": "@taskType", "value": task_type})
+
+    items = list(container.query_items(
+        query=query, parameters=params, enable_cross_partition_query=True
+    ))
+
+    return {
+        "server": server_name,
+        "active_memories": len(items),
+        "memories": [
+            {
+                "id": item.get("id"),
+                "type": item.get("type"),
+                "instruction": item.get("instruction"),
+                "expiresAt": item.get("expiresAt"),
+                "scope": item.get("scope"),
+            }
+            for item in items
+        ],
+    }
