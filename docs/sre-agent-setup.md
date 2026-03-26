@@ -87,7 +87,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Go to **Builder → Skills**
 2. Click **Create skill**
 3. Name: `wintel-health-check-investigation`
-4. Description: `Use when investigating health check failures or warnings on Windows servers. Covers CPU, memory, disk, services, and event log analysis for Arc-enrolled servers.`
+4. Description: `Investigates Windows server health check failures and warnings reported by the automated health check system.`
 5. Copy the contents of `sre-skills/wintel-health-check-investigation/SKILL.md` into the SKILL.md editor
 6. Attach tools:
    - `RunAzCliReadCommands` (built-in — also enables KQL queries via `az monitor log-analytics query`)
@@ -96,7 +96,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 ### 4b: Security Agent Troubleshooting Skill
 
 1. Create skill: `security-agent-troubleshooting`
-2. Description: `Use when a security agent (Defender for Endpoint) is unhealthy, disconnected, or non-compliant. Diagnoses root cause and attempts safe remediation via Arc Run Commands.`
+2. Description: `Diagnoses and remediates Microsoft Defender for Endpoint agent issues on Windows servers.`
 3. Copy contents of `sre-skills/security-agent-troubleshooting/SKILL.md`
 4. Attach tools: `RunAzCliReadCommands`, `RunAzCliWriteCommands`
 5. Save
@@ -104,7 +104,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 ### 4c: Patch Validation Skill
 
 1. Create skill: `patch-validation`
-2. Description: `Use before and after Windows patching to validate server health. Runs pre-checks, post-checks, and recommends rollback if needed.`
+2. Description: `Validates server health before and after Windows patch deployment. Assesses rollback need.`
 3. Copy contents of `sre-skills/patch-validation/SKILL.md`
 4. Attach tools: `RunAzCliReadCommands`
 5. Save
@@ -112,7 +112,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 ### 4d: Compliance Investigation Skill
 
 1. Create skill: `compliance-investigation`
-2. Description: `Use when investigating non-compliant servers found by Defender for Cloud regulatory compliance assessments.`
+2. Description: `Investigates non-compliant controls found by Microsoft Defender for Cloud AND Azure Policy, correlates findings across both sources, and prioritizes remediation.`
 3. Copy contents of `sre-skills/compliance-investigation/SKILL.md`
 4. Attach tools: `RunAzCliReadCommands`
 5. Save
@@ -120,7 +120,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 ### 4e: VMware BAU Operations Skill
 
 1. Create skill: `vmware-bau-operations`
-2. Description: `Use for VMware/Hyper-V BAU operations: snapshot management, resource monitoring, VM health checks.`
+2. Description: `Performs VMware/Hyper-V BAU tasks including snapshot cleanup, resource monitoring, and VM health checks.`
 3. Copy contents of `sre-skills/vmware-bau-operations/SKILL.md`
 4. Attach tools: `RunAzCliReadCommands`, `RunAzCliWriteCommands`
 5. Save
