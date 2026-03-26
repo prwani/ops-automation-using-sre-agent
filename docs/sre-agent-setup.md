@@ -278,30 +278,85 @@ In the SRE Agent chat, type:
 Expected: Agent uses `RunAzCliReadCommands` to query Arc servers, returns list with health info.
 
 ### Test 2: Trigger an Incident
-On ArcBox-Client, stress-test a VM:
+
+RDP into ArcBox-Client (`arcdemo` / `ArcBoxD3mo2026!`) and run these commands in PowerShell to spike CPU and stop a service on ArcBox-Win2K22:
+
 ```powershell
-# Spike CPU on ArcBox-Win2K22 via Arc Run Command
-az connectedmachine run-command create \
-  --resource-group rg-arcbox-itpro \
-  --machine-name ArcBox-Win2K22 \
-  --name stressCPU \
-  --script "while (\$true) { [math]::Sqrt(12345) }" \
-  --async-execution true
+# From ArcBox-Client PowerShell — connects to nested VM via Hyper-V PS Direct
+$cred = New-Object PSCredential("arcdemo", (ConvertTo-SecureString "JS123!!" -AsPlainText -Force))
+
+# Spike CPU on all cores for 10 minutes
+Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
+    $end = (Get-Date).AddMinutes(10)
+    1..[Environment]::ProcessorCount | ForEach-Object {
+        Start-Job -ScriptBlock {
+            param($endTime)
+            while ((Get-Date) -lt $endTime) { [math]::Sqrt(12345) }
+        } -ArgumentList $end
+    }
+    Write-Output "CPU stress started: $([Environment]::ProcessorCount) cores for 10 min"
+}
+
+# Also stop a service to create a correlated alert
+Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
+    Stop-Service -Name W32Time -Force
+    Write-Output "W32Time stopped: $((Get-Service W32Time).Status)"
+}
 ```
 
-Wait for the `alert-high-cpu` to fire → SRE Agent should auto-receive the incident and start investigating.
+> **Nested VM credentials:** Username `arcdemo`, password `JS123!!` (set by ArcBox bootstrap).
+
+Verify CPU is spiking:
+```powershell
+Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
+    (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 2 -MaxSamples 3).CounterSamples |
+        ForEach-Object { "CPU: $([math]::Round($_.CookedValue))%" }
+}
+```
+
+Wait 5-10 minutes for the `alert-high-cpu` alert rule to fire → SRE Agent should auto-receive the incident and start investigating.
+
+**Clean up after testing:**
+```powershell
+Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
+    Get-Job | Stop-Job | Remove-Job
+    Start-Service W32Time
+    Write-Output "Cleaned up. CPU=$(Get-Counter '\Processor(_Total)\% Processor Time' -MaxSamples 1 | Select-Object -Expand CounterSamples | Select-Object -Expand CookedValue | ForEach-Object {[math]::Round($_)})% W32Time=$((Get-Service W32Time).Status)"
+}
+```
 
 ### Test 3: Security Agent Troubleshooting
+
+From ArcBox-Client PowerShell, disable the Defender agent:
+
 ```powershell
-# Stop Defender service on a VM
-az connectedmachine run-command create \
-  --resource-group rg-arcbox-itpro \
-  --machine-name ArcBox-Win2K22 \
-  --name stopDefender \
-  --script "Stop-Service -Name 'WinDefend' -Force"
+$cred = New-Object PSCredential("arcdemo", (ConvertTo-SecureString "JS123!!" -AsPlainText -Force))
+
+# Stop Windows Defender service
+Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
+    # Attempt to stop Defender — may require elevated/TrustedInstaller
+    Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue
+    Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+    Write-Output "Defender status: $((Get-Service WinDefend -ErrorAction SilentlyContinue).Status)"
+    Write-Output "Realtime monitoring: $((Get-MpPreference).DisableRealtimeMonitoring)"
+}
 ```
 
-Defender for Cloud should flag the agent as unhealthy → SRE Agent picks it up and uses the security-agent-troubleshooting skill.
+> **Note:** On some Windows Server versions, stopping WinDefend requires TrustedInstaller privileges. If the service doesn't stop, disabling real-time monitoring (`Set-MpPreference`) is sufficient — Defender for Cloud will still flag the server as unhealthy.
+
+Defender for Cloud should detect the unhealthy agent within 15-30 minutes → SRE Agent picks it up and uses the `security-agent-troubleshooting` skill to diagnose.
+
+**Alternatively**, ask SRE Agent to investigate proactively:
+> "Check if Defender for Endpoint is healthy on all my Arc servers"
+
+**Clean up after testing:**
+```powershell
+Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
+    Set-MpPreference -DisableRealtimeMonitoring $false
+    Start-Service WinDefend -ErrorAction SilentlyContinue
+    Write-Output "Restored: Defender=$((Get-Service WinDefend -ErrorAction SilentlyContinue).Status) RT=$(-not (Get-MpPreference).DisableRealtimeMonitoring)"
+}
+```
 
 ## Troubleshooting
 
