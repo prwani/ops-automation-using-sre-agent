@@ -10,7 +10,6 @@ triggers:
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
-  - query-compliance-state
   - glpi-create-ticket
   - generate-compliance-report
 sop_source: docs/sops/compliance-reporting.md
@@ -35,7 +34,7 @@ az security regulatory-compliance-standards list --query "[].{Standard:name, Sta
 
 For specific failing controls:
 ```
-query-compliance-state(subscription_id=<subscription_id>, standard="CIS")
+RunAzCliReadCommands: az graph query -q "SecurityResources | where type == 'microsoft.security/regulatorycompliancestandards/regulatorycompliancecontrols/regulatorycomplianceassessments' | where subscriptionId == '<subscription_id>' | extend standard = tostring(properties.regulatoryComplianceStandardName) | where standard contains 'CIS' | extend state = tostring(properties.state) | where state == 'Failed'" --subscriptions <subscription_id> -o json
 ```
 
 Identify failing controls with highest impact (most affected servers × severity).

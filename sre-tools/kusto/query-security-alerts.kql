@@ -1,5 +1,12 @@
 // query-security-alerts — Defender for Cloud security alerts
 // Parameters: ServerName (optional string), Severity (optional: "High"|"Medium"|"Low"), HoursBack (int)
+//
+// HOW TO USE THIS QUERY:
+//   Option A — Paste into SRE Agent chat directly:
+//     "Run this KQL against my Log Analytics workspace: <paste query below>"
+//   Option B — Use via az CLI (or RunAzCliReadCommands tool):
+//     az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "<query>" -o json
+//   Option C — Create as a Python tool wrapping the az CLI command (see docs/sre-agent-setup.md Step 6b)
 let ServerName = "{server_name}";  // empty string = all servers
 let Severity = "{severity}";       // empty string = all severities
 let HoursBack = {hours_back};

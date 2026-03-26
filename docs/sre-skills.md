@@ -27,14 +27,16 @@ skill-name/
 
 ## Custom Tools
 
-### Kusto Tools (KQL)
+### Kusto Tools (KQL via az CLI)
 
-| Tool | Purpose |
-|---|---|
-| `query-perf-trends` | CPU/memory/disk trends over N days from Log Analytics |
-| `query-security-alerts` | Defender for Cloud security alerts by server/severity |
-| `query-compliance-state` | Regulatory compliance status from Resource Graph |
-| `query-update-compliance` | Missing patches by server/classification |
+These KQL queries are executed via `az monitor log-analytics query` (or `az graph query` for Resource Graph) using the built-in `RunAzCliReadCommands` tool — **not** via a native Kusto connector. The SRE Agent Kusto connector is for standalone ADX clusters, not Log Analytics workspaces.
+
+| Tool | Purpose | Execution Method |
+|---|---|---|
+| `query-perf-trends` | CPU/memory/disk trends over N days from Log Analytics | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` |
+| `query-security-alerts` | Defender for Cloud security alerts by server/severity | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` |
+| `query-compliance-state` | Regulatory compliance status from Resource Graph | `az graph query` (Resource Graph, not Log Analytics) |
+| `query-update-compliance` | Missing patches by server/classification | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` |
 
 ### Python Tools
 

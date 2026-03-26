@@ -90,8 +90,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 4. Description: `Use when investigating health check failures or warnings on Windows servers. Covers CPU, memory, disk, services, and event log analysis for Arc-enrolled servers.`
 5. Copy the contents of `sre-skills/wintel-health-check-investigation/SKILL.md` into the SKILL.md editor
 6. Attach tools:
-   - `RunAzCliReadCommands` (built-in)
-   - `query-perf-trends` (custom Kusto — create in Step 6 first, or attach later)
+   - `RunAzCliReadCommands` (built-in — also enables KQL queries via `az monitor log-analytics query`)
 7. Click **Save**
 
 ### 4b: Security Agent Troubleshooting Skill
@@ -99,7 +98,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Create skill: `security-agent-troubleshooting`
 2. Description: `Use when a security agent (Defender for Endpoint) is unhealthy, disconnected, or non-compliant. Diagnoses root cause and attempts safe remediation via Arc Run Commands.`
 3. Copy contents of `sre-skills/security-agent-troubleshooting/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `query-security-alerts`
+4. Attach tools: `RunAzCliReadCommands`, `RunAzCliWriteCommands`
 5. Save
 
 ### 4c: Patch Validation Skill
@@ -107,7 +106,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Create skill: `patch-validation`
 2. Description: `Use before and after Windows patching to validate server health. Runs pre-checks, post-checks, and recommends rollback if needed.`
 3. Copy contents of `sre-skills/patch-validation/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`, `query-update-compliance`
+4. Attach tools: `RunAzCliReadCommands`
 5. Save
 
 ### 4d: Compliance Investigation Skill
@@ -115,7 +114,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Create skill: `compliance-investigation`
 2. Description: `Use when investigating non-compliant servers found by Defender for Cloud regulatory compliance assessments.`
 3. Copy contents of `sre-skills/compliance-investigation/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`, `query-compliance-state`
+4. Attach tools: `RunAzCliReadCommands`
 5. Save
 
 ### 4e: VMware BAU Operations Skill
@@ -151,48 +150,52 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 
 > **Tip:** Enable the **Quickstart response plan** when connecting Azure Monitor for an immediate default (Sev3 = autonomous). Then customize with the plans above.
 
-## Step 6: Set Up Kusto Connector + Create Custom Tools
+## Step 6: Set Up KQL Queries + Create Custom Tools
 
-### 6a: Configure Kusto Connector (Required before creating Kusto tools)
+### 6a: Log Analytics Access (Built-in — No Kusto Connector Needed)
 
-The Kusto connector lets your agent run KQL queries against your Log Analytics workspace. You must set this up **before** creating Kusto tools.
+SRE Agent already has **built-in access to Log Analytics** via the managed resource groups added in Step 2. The agent's managed identity was automatically granted **Log Analytics Reader** when you added `rg-arcbox-itpro`.
 
-1. Go to **Builder → Connectors**
-2. Click **Azure Data Explorer (Kusto)**
-3. Select **Database query connector** (for predefined queries, not schema learning)
-4. Configure:
+> **Important:** Do NOT use the Kusto connector with `ade.loganalytics.io` ADX proxy URLs. The SRE Agent Kusto connector is designed for standalone Azure Data Explorer clusters, not Log Analytics workspaces. For Log Analytics queries, use one of the approaches below.
 
-| Setting | Value |
-|---|---|
-| Connection name | `law-arcbox` |
-| Cluster URL | `https://ade.loganalytics.io/subscriptions/31adb513-7077-47bb-9567-8e9d2a462bcf/resourcegroups/rg-arcbox-itpro/providers/microsoft.operationalinsights/workspaces/law-arcbox-itpro-sc` |
-| Database | `law-arcbox-itpro-sc` |
+**How to run KQL queries against Log Analytics:**
 
-> **Note:** For Log Analytics workspaces, use the ADX proxy URL format: `https://ade.loganalytics.io/subscriptions/{sub}/resourcegroups/{rg}/providers/microsoft.operationalinsights/workspaces/{workspace}`. This lets you query Log Analytics data using standard KQL via the ADX interface.
+- **Option 1 — Chat directly:** Paste KQL into the agent chat: *"Run this KQL against my Log Analytics workspace: `Perf | where Computer == 'ArcBox-Win2K22' | summarize avg(CounterValue) by CounterName`"*
+- **Option 2 — `RunAzCliReadCommands` tool:** The built-in `RunAzCliReadCommands` tool can execute `az monitor log-analytics query` commands directly:
+  ```
+  az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "<KQL>" -o json
+  ```
+- **Option 3 — Python tools:** Create Python tools that wrap `az monitor log-analytics query` (see 6b below)
 
-5. The agent's managed identity should already have **Log Analytics Reader** via the managed resource group (Step 2). If not, grant it manually.
-6. Click **Test connection** to verify
-7. Click **Save**
+### 6b: Create KQL Tools (as Python Tools Wrapping az CLI)
 
-### 6b: Create Kusto Tools
+Instead of native Kusto tools, create **Python tools** that execute KQL via `az monitor log-analytics query`. Go to **Builder → Subagent builder → Create → Tool → Python tool**
 
-Now create parameterized KQL tools. Go to **Builder → Subagent builder → Create → Tool → Kusto tool**
+Example — `query-perf-trends` tool:
 
-For each tool:
-1. Set the **Connector** to `law-arcbox`
-2. Paste the KQL query from the repo file
-3. Use `##paramName##` syntax for parameters (the agent auto-substitutes based on user input)
+```python
+def main(server_name: str, time_range: str = "1d") -> dict:
+    import subprocess, json
+    query = f"Perf | where Computer == '{server_name}' | where TimeGenerated > ago({time_range}) | summarize avg(CounterValue) by CounterName"
+    result = subprocess.run(
+        ["az", "monitor", "log-analytics", "query",
+         "--workspace", "f98fca75-7479-45e5-bf0c-87b56a9f9e8c",
+         "--analytics-query", query, "-o", "json"],
+        capture_output=True, text=True
+    )
+    return json.loads(result.stdout) if result.returncode == 0 else {"error": result.stderr}
+```
 
-| Tool Name | Source File | Parameters | Description |
+| Tool Name | Source KQL | Execution Method | Description |
 |---|---|---|---|
-| `query-perf-trends` | `sre-tools/kusto/query-perf-trends.kql` | `##server_name##`, `##time_range##` | CPU/memory/disk trends over time |
-| `query-security-alerts` | `sre-tools/kusto/query-security-alerts.kql` | `##server_name##`, `##severity##` | Defender for Cloud security alerts |
-| `query-compliance-state` | `sre-tools/kusto/query-compliance-state.kql` | `##subscription_id##`, `##compliance_standard##` | Regulatory compliance from Resource Graph |
-| `query-update-compliance` | `sre-tools/kusto/query-update-compliance.kql` | `##server_name##` | Missing patches by classification |
+| `query-perf-trends` | `sre-tools/kusto/query-perf-trends.kql` | `az monitor log-analytics query` | CPU/memory/disk trends over time |
+| `query-security-alerts` | `sre-tools/kusto/query-security-alerts.kql` | `az monitor log-analytics query` | Defender for Cloud security alerts |
+| `query-compliance-state` | `sre-tools/kusto/query-compliance-state.kql` | `az graph query` (Resource Graph, not Log Analytics) | Regulatory compliance status |
+| `query-update-compliance` | `sre-tools/kusto/query-update-compliance.kql` | `az monitor log-analytics query` | Missing patches by classification |
 
-> **Tip:** Test each query in the portal before saving. The portal validates it against your workspace and shows execution time.
+> **Tip:** Alternatively, skip creating Python tools entirely — just attach `RunAzCliReadCommands` to your skills and subagents. It can run `az monitor log-analytics query` and `az graph query` directly.
 
-> **Note:** `query-compliance-state` queries Azure Resource Graph, not Log Analytics. You may need a separate connector for Resource Graph, or use `RunAzCliReadCommands` (built-in) with `az graph query` instead.
+> **Note:** `query-compliance-state` queries Azure Resource Graph, not Log Analytics. Use `az graph query -q "<KQL>"` instead of `az monitor log-analytics query`.
 
 ### 6c: Create Python Tools
 
@@ -227,7 +230,7 @@ Go to **Builder → Subagent builder**
 | Name | `vm-diagnostics` |
 | Description | `Specialized in diagnosing Windows/Linux VM issues: performance, disk, services, event logs. Uses Arc Run Commands for remote investigation.` |
 | Enable skills | ✅ Yes |
-| Tools | `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `query-perf-trends`, `glpi-create-ticket`, `cosmos-check-memories` |
+| Tools | `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `glpi-create-ticket`, `cosmos-check-memories` |
 | Instructions | "You are a VM diagnostics specialist. When investigating a server issue: 1) Check current health via Arc Run Commands, 2) Analyze performance trends via KQL, 3) Check if any memory/suppression rules apply, 4) Determine root cause, 5) Create GLPI ticket if human action needed." |
 
 ### 7b: Security Troubleshooting Subagent
@@ -237,7 +240,7 @@ Go to **Builder → Subagent builder**
 | Name | `security-troubleshooter` |
 | Description | `Specialized in diagnosing Defender for Endpoint agent failures: checks agent health, connectivity, event logs, and attempts safe remediation.` |
 | Enable skills | ✅ Yes |
-| Tools | `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `query-security-alerts`, `glpi-create-ticket` |
+| Tools | `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `glpi-create-ticket` |
 | Instructions | "You are a security agent specialist. When a Defender agent is unhealthy: 1) Check service status via Arc Run Command, 2) Review event logs for errors, 3) Test connectivity to Defender cloud endpoints, 4) Attempt safe remediation (restart service, force update), 5) If fix fails, escalate with full diagnostic context." |
 
 Test each subagent in the **Playground** before going live.
@@ -317,5 +320,5 @@ Defender for Cloud should flag the agent as unhealthy → SRE Agent picks it up 
 | Incidents not arriving | Check Azure Monitor alert → Action Group → confirm SRE Agent integration is linked |
 | Skills not loading | Ensure skill description matches the context. Skills are loaded automatically — don't use `/skill` command |
 | Subagent not invoked | Type `/agent vm-diagnostics` to explicitly invoke. Check tools are attached. |
-| KQL tools failing | Verify Log Analytics workspace ID is correct and managed identity has Log Analytics Reader role |
+| KQL queries failing | Verify workspace ID `f98fca75-7479-45e5-bf0c-87b56a9f9e8c` is correct, managed identity has Log Analytics Reader role, and you're using `az monitor log-analytics query` (not the Kusto connector) |
 

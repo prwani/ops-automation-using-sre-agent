@@ -9,7 +9,6 @@ triggers:
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
-  - query-update-compliance
   - cosmos-query-runs
   - glpi-create-ticket
 sop_source: docs/sops/windows-patching.md
@@ -60,7 +59,7 @@ Any Critical events post-patch = **WARN**. Crash dump events = **FAIL → rollba
 
 ### Check 4 — Missing patches cleared
 ```
-query-update-compliance(server_id=<server_id>)
+RunAzCliReadCommands: az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Update | where TimeGenerated >= ago(7d) | where UpdateState == 'Needed' | where Computer == '<server_name>' | summarize MissingPatches=count(), CriticalCount=countif(MSRCSeverity == 'Critical') by Computer, Classification" -o json
 ```
 Verify patched KBs now show as installed.
 

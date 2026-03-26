@@ -10,7 +10,6 @@ triggers:
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
-  - query-perf-trends
   - glpi-create-ticket
   - cosmos-query-runs
 sop_source: docs/sops/vmware-bau.md
@@ -53,8 +52,11 @@ Remove-VMCheckpoint -VMName "<vm_name>" -Name "<checkpoint_name>" -Confirm:$fals
 ## Task 2 — VM Resource Utilization Report
 
 ```
-query-perf-trends(resource_group=<arcbox_rg>, metric="cpu", days=7)
-query-perf-trends(resource_group=<arcbox_rg>, metric="memory", days=7)
+RunAzCliReadCommands: az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Perf | where TimeGenerated > ago(7d) | where ObjectName == 'Processor' and CounterName == '% Processor Time' and InstanceName == '_Total' | summarize AvgCPU=round(avg(CounterValue),1), MaxCPU=round(max(CounterValue),1) by Computer" -o json
+```
+
+```
+RunAzCliReadCommands: az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Perf | where TimeGenerated > ago(7d) | where ObjectName == 'Memory' and CounterName == '% Committed Bytes In Use' | summarize AvgMem=round(avg(CounterValue),1), MaxMem=round(max(CounterValue),1) by Computer" -o json
 ```
 
 Flag VMs with:

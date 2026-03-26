@@ -20,7 +20,10 @@ environment. GLPI provides both **ITSM** (ticket management) and **CMDB**
 5. The wizard checks PHP extensions and directory permissions — all should pass on the
    pre-built container. Click **Continue**.
 6. Enter the database connection details (these are pre-configured in the container):
-   - **SQL server:** `localhost`
+
+   > **Important:** Use `127.0.0.1` (NOT `localhost`) as the SQL server address. The `localhost` hostname attempts a Unix socket connection which does not exist in the ACI container environment.
+
+   - **SQL server:** `127.0.0.1`
    - **SQL user:** `glpi`
    - **SQL password:** `glpi`
 7. Select the **glpi** database and click **Continue**.

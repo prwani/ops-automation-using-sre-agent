@@ -9,7 +9,6 @@ triggers:
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
-  - query-perf-trends
   - cosmos-query-runs
   - cosmos-check-memories
   - glpi-create-ticket
@@ -68,7 +67,7 @@ For errors found: Check Event ID, source, and message pattern.
 
 **CPU/Memory:**
 ```
-query-perf-trends(server_id=<server_id>, metric="cpu|memory", hours=24)
+RunAzCliReadCommands: az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Perf | where Computer == '<server_name>' | where TimeGenerated > ago(24h) | where ObjectName in ('Processor', 'Memory') | summarize avg(CounterValue), max(CounterValue) by bin(TimeGenerated, 1h), CounterName" -o json
 ```
 Identify if this is a spike or sustained high usage. Check for known batch job patterns in memories.
 
