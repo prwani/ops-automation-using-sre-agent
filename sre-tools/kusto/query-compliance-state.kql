@@ -6,9 +6,8 @@
 //   NOTE: This queries Azure Resource Graph, not Log Analytics. Use `az graph query` instead of `az monitor log-analytics query`.
 //   Option A — Paste into SRE Agent chat directly:
 //     "Run this query against Azure Resource Graph: <paste query below>"
-//   Option B — Use via az CLI (or RunAzCliReadCommands tool):
-//     az graph query -q "<query>" --subscriptions <subscription_id> -o json
-//   Option C — Create as a Python tool wrapping the az CLI command (see docs/sre-agent-setup.md Step 6b)
+//   Option B — Agent uses RunAzCliReadCommands (built-in tool, no custom tool needed):
+//     az graph query -q "<this query>" --subscriptions <subscription_id> -o json
 SecurityResources
 | where type == "microsoft.security/regulatorycompliancestandards/regulatorycompliancecontrols/regulatorycomplianceassessments"
 | where subscriptionId == "{subscription_id}"

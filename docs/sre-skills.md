@@ -27,18 +27,21 @@ skill-name/
 
 ## Custom Tools
 
-### Kusto Tools (KQL via az CLI)
+### KQL Reference Queries (No Custom Tools Needed)
 
-These KQL queries are executed via `az monitor log-analytics query` (or `az graph query` for Resource Graph) using the built-in `RunAzCliReadCommands` tool — **not** via a native Kusto connector. The SRE Agent Kusto connector is for standalone ADX clusters, not Log Analytics workspaces.
+The KQL files in `sre-tools/kusto/` are **reference queries**, not standalone tools. The agent executes them via the built-in `RunAzCliReadCommands` tool — no custom tool creation needed. The SRE Agent Python sandbox does not have `az CLI` installed, so custom Python tools wrapping `subprocess` + `az CLI` will not work.
 
-| Tool | Purpose | Execution Method |
+- **Log Analytics queries:** `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "<KQL>" -o json`
+- **Resource Graph queries:** `az graph query -q "<KQL>" --subscriptions <subscription_id> -o json`
+
+| Reference Query | Purpose | Execution Method |
 |---|---|---|
-| `query-perf-trends` | CPU/memory/disk trends over N days from Log Analytics | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` |
-| `query-security-alerts` | Defender for Cloud security alerts by server/severity | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` |
-| `query-compliance-state` | Regulatory compliance status from Resource Graph | `az graph query` (Resource Graph, not Log Analytics) |
-| `query-update-compliance` | Missing patches by server/classification | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` |
+| `query-perf-trends.kql` | CPU/memory/disk trends over N days from Log Analytics | `RunAzCliReadCommands` → `az monitor log-analytics query` |
+| `query-security-alerts.kql` | Defender for Cloud security alerts by server/severity | `RunAzCliReadCommands` → `az monitor log-analytics query` |
+| `query-compliance-state.kql` | Regulatory compliance status from Resource Graph | `RunAzCliReadCommands` → `az graph query` |
+| `query-update-compliance.kql` | Missing patches by server/classification | `RunAzCliReadCommands` → `az monitor log-analytics query` |
 
-### Python Tools
+### Python Tools (GLPI + Cosmos DB Only)
 
 | Tool | Purpose |
 |---|---|

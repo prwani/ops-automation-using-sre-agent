@@ -63,25 +63,25 @@ doc.add_heading('Step 5: Upload Skills', level=1)
 doc.add_paragraph('Builder > Skills > Create skill. Copy SKILL.md from repo for each:')
 t = doc.add_table(rows=6, cols=3); t.style = 'Light Grid Accent 1'
 skills = [('Skill Name','Description','Tools'),
-    ('wintel-health-check-investigation','Health check: CPU, memory, disk, services','RunAzCliReadCommands, query-perf-trends'),
-    ('security-agent-troubleshooting','Defender agent diagnosis + remediation','RunAzCliReadCommands, RunAzCliWriteCommands, query-security-alerts'),
-    ('patch-validation','Pre/post patch checks, rollback','RunAzCliReadCommands, query-update-compliance'),
-    ('compliance-investigation','Defender for Cloud non-compliance','RunAzCliReadCommands, query-compliance-state'),
+    ('wintel-health-check-investigation','Health check: CPU, memory, disk, services','RunAzCliReadCommands'),
+    ('security-agent-troubleshooting','Defender agent diagnosis + remediation','RunAzCliReadCommands, RunAzCliWriteCommands'),
+    ('patch-validation','Pre/post patch checks, rollback','RunAzCliReadCommands'),
+    ('compliance-investigation','Defender for Cloud non-compliance','RunAzCliReadCommands'),
     ('vmware-bau-operations','Snapshot cleanup, VM health','RunAzCliReadCommands, RunAzCliWriteCommands')]
 for r, (a, b, c) in enumerate(skills):
     t.rows[r].cells[0].text = a; t.rows[r].cells[1].text = b; t.rows[r].cells[2].text = c
 
 doc.add_heading('Step 6: Create Custom Tools', level=1)
-doc.add_heading('Kusto Tools (Builder > Tools > Kusto)', level=2)
-doc.add_paragraph('Target: law-arcbox-itpro-sc')
+doc.add_heading('KQL Reference Queries (No Custom Tools Needed)', level=2)
+doc.add_paragraph('The KQL files in sre-tools/kusto/ are reference queries. The agent executes them via the built-in RunAzCliReadCommands tool using az monitor log-analytics query (or az graph query for Resource Graph). No custom tool creation needed.')
 t = doc.add_table(rows=5, cols=2); t.style = 'Light Grid Accent 1'
-for r, (k, v) in enumerate([('Tool','Source'), ('query-perf-trends','sre-tools/kusto/query-perf-trends.kql'),
+for r, (k, v) in enumerate([('Reference Query','Source'), ('query-perf-trends','sre-tools/kusto/query-perf-trends.kql'),
     ('query-security-alerts','sre-tools/kusto/query-security-alerts.kql'),
     ('query-compliance-state','sre-tools/kusto/query-compliance-state.kql'),
     ('query-update-compliance','sre-tools/kusto/query-update-compliance.kql')]):
     t.rows[r].cells[0].text = k; t.rows[r].cells[1].text = v
 
-doc.add_heading('Python Tools (Builder > Tools > Python)', level=2)
+doc.add_heading('Python Tools — GLPI + Cosmos DB Only (Builder > Tools > Python)', level=2)
 doc.add_paragraph('Deps: httpx, azure-cosmos')
 t = doc.add_table(rows=5, cols=2); t.style = 'Light Grid Accent 1'
 for r, (k, v) in enumerate([('Tool','Source'), ('glpi-create-ticket','sre-tools/python/glpi_tools.py'),
@@ -95,15 +95,15 @@ doc.add_paragraph('Builder > Subagent builder')
 doc.add_heading('VM Diagnostics', level=2)
 t = doc.add_table(rows=4, cols=2); t.style = 'Light Grid Accent 1'
 for r, (k, v) in enumerate([('Setting','Value'), ('Name','vm-diagnostics'),
-    ('Tools','RunAzCliReadCommands, RunAzCliWriteCommands, query-perf-trends, glpi-create-ticket, cosmos-check-memories'),
-    ('Instructions','VM specialist: Check health via Arc, analyze KQL trends, check memories, root cause, create ticket if needed')]):
+    ('Tools','RunAzCliReadCommands, RunAzCliWriteCommands, glpi-create-ticket, cosmos-check-memories'),
+    ('Instructions','VM specialist: Check health via Arc, analyze KQL trends via RunAzCliReadCommands, check memories, root cause, create ticket if needed')]):
     t.rows[r].cells[0].text = k; t.rows[r].cells[1].text = v
 
 doc.add_heading('Security Troubleshooter', level=2)
 t = doc.add_table(rows=4, cols=2); t.style = 'Light Grid Accent 1'
 for r, (k, v) in enumerate([('Setting','Value'), ('Name','security-troubleshooter'),
-    ('Tools','RunAzCliReadCommands, RunAzCliWriteCommands, query-security-alerts, glpi-create-ticket'),
-    ('Instructions','Security specialist: Check service, event logs, connectivity, safe remediation, escalate if fix fails')]):
+    ('Tools','RunAzCliReadCommands, RunAzCliWriteCommands, glpi-create-ticket'),
+    ('Instructions','Security specialist: Check service, event logs, connectivity, safe remediation, escalate if fix fails. Use RunAzCliReadCommands for KQL security alert queries.')]):
     t.rows[r].cells[0].text = k; t.rows[r].cells[1].text = v
 doc.add_paragraph('Test in Playground before going live.')
 

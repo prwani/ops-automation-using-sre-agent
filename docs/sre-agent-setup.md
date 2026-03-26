@@ -150,7 +150,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 
 > **Tip:** Enable the **Quickstart response plan** when connecting Azure Monitor for an immediate default (Sev3 = autonomous). Then customize with the plans above.
 
-## Step 6: Set Up KQL Queries + Create Custom Tools
+## Step 6: Set Up KQL Reference Queries + Create Custom Tools
 
 ### 6a: Log Analytics Access (Built-in — No Kusto Connector Needed)
 
@@ -161,43 +161,33 @@ SRE Agent already has **built-in access to Log Analytics** via the managed resou
 **How to run KQL queries against Log Analytics:**
 
 - **Option 1 — Chat directly:** Paste KQL into the agent chat: *"Run this KQL against my Log Analytics workspace: `Perf | where Computer == 'ArcBox-Win2K22' | summarize avg(CounterValue) by CounterName`"*
-- **Option 2 — `RunAzCliReadCommands` tool:** The built-in `RunAzCliReadCommands` tool can execute `az monitor log-analytics query` commands directly:
+- **Option 2 — `RunAzCliReadCommands` tool (recommended):** The built-in `RunAzCliReadCommands` tool can execute `az monitor log-analytics query` commands directly:
   ```
   az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "<KQL>" -o json
   ```
-- **Option 3 — Python tools:** Create Python tools that wrap `az monitor log-analytics query` (see 6b below)
+  For Azure Resource Graph queries (e.g., compliance state), use:
+  ```
+  az graph query -q "<KQL>" --subscriptions <subscription_id> -o json
+  ```
 
-### 6b: Create KQL Tools (as Python Tools Wrapping az CLI)
+**No custom tools needed for KQL.** The built-in `RunAzCliReadCommands` tool (already attached to skills) handles all Log Analytics and Resource Graph queries. Custom Python tools wrapping `subprocess` + `az CLI` **will not work** in the SRE Agent sandbox (az CLI is not installed in the Python execution environment).
 
-Instead of native Kusto tools, create **Python tools** that execute KQL via `az monitor log-analytics query`. Go to **Builder → Subagent builder → Create → Tool → Python tool**
+### 6b: KQL Reference Queries
 
-Example — `query-perf-trends` tool:
+The KQL files in `sre-tools/kusto/` serve as **reference queries** — they document the exact KQL the agent should run for common scenarios. You can:
+- Paste them into skill instructions so the agent knows the query patterns
+- Let the agent use them directly via `RunAzCliReadCommands`
 
-```python
-def main(server_name: str, time_range: str = "1d") -> dict:
-    import subprocess, json
-    query = f"Perf | where Computer == '{server_name}' | where TimeGenerated > ago({time_range}) | summarize avg(CounterValue) by CounterName"
-    result = subprocess.run(
-        ["az", "monitor", "log-analytics", "query",
-         "--workspace", "f98fca75-7479-45e5-bf0c-87b56a9f9e8c",
-         "--analytics-query", query, "-o", "json"],
-        capture_output=True, text=True
-    )
-    return json.loads(result.stdout) if result.returncode == 0 else {"error": result.stderr}
-```
-
-| Tool Name | Source KQL | Execution Method | Description |
+| Reference Query | Source File | Execution Method | Purpose |
 |---|---|---|---|
-| `query-perf-trends` | `sre-tools/kusto/query-perf-trends.kql` | `az monitor log-analytics query` | CPU/memory/disk trends over time |
-| `query-security-alerts` | `sre-tools/kusto/query-security-alerts.kql` | `az monitor log-analytics query` | Defender for Cloud security alerts |
-| `query-compliance-state` | `sre-tools/kusto/query-compliance-state.kql` | `az graph query` (Resource Graph, not Log Analytics) | Regulatory compliance status |
-| `query-update-compliance` | `sre-tools/kusto/query-update-compliance.kql` | `az monitor log-analytics query` | Missing patches by classification |
-
-> **Tip:** Alternatively, skip creating Python tools entirely — just attach `RunAzCliReadCommands` to your skills and subagents. It can run `az monitor log-analytics query` and `az graph query` directly.
+| Performance trends | `sre-tools/kusto/query-perf-trends.kql` | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` | CPU/memory/disk trends over time |
+| Security alerts | `sre-tools/kusto/query-security-alerts.kql` | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` | Defender for Cloud security alerts |
+| Compliance state | `sre-tools/kusto/query-compliance-state.kql` | `az graph query` (Resource Graph, not Log Analytics) | Regulatory compliance status |
+| Update compliance | `sre-tools/kusto/query-update-compliance.kql` | `az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c` | Missing patches by classification |
 
 > **Note:** `query-compliance-state` queries Azure Resource Graph, not Log Analytics. Use `az graph query -q "<KQL>"` instead of `az monitor log-analytics query`.
 
-### 6c: Create Python Tools
+### 6c: Create Python Tools (GLPI + Cosmos DB Only)
 
 Go to **Builder → Subagent builder → Create → Tool → Python tool**
 
