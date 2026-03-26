@@ -80,3 +80,10 @@ Thumbs.db
 *.key
 *.pfx
 *.p12
+
+# Generated infrastructure files
+infra/main.json
+
+app-logs/
+app-logs.zip
+*.zip

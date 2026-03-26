@@ -4,9 +4,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    azure_tenant_id: str
-    azure_client_id: str
-    cosmos_endpoint: str
+    azure_tenant_id: str = ""
+    azure_client_id: str = ""
+    cosmos_endpoint: str = ""
     cosmos_database: str = "ops-automation"
     foundry_endpoint: str = ""
     foundry_api_key: str = ""

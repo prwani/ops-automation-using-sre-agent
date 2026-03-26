@@ -1,6 +1,6 @@
 # Azure SRE Agent — Setup & Configuration Guide
 
-Step-by-step guide to deploy and configure Azure SRE Agent for the Wintel Ops Automation project.
+Step-by-step guide to deploy and configure Azure SRE Agent for the Wintel Ops Automation project. See [architecture.md](architecture.md) for the overall system design and [sre-skills.md](sre-skills.md) for the skill inventory.
 
 ## Prerequisites
 

@@ -34,6 +34,8 @@ async def list_memories(
 ) -> list[dict[str, Any]]:
     """List memories, optionally filtered by status."""
     client = get_cosmos_client()
+    if client is None:
+        return []
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("memories")
     user_id = user.get("preferred_username", user.get("oid", "unknown"))
@@ -60,6 +62,9 @@ async def create_memory(
     user: dict = Depends(require_role("Operator")),
 ) -> dict[str, Any]:
     """Create a new memory/instruction."""
+    client = get_cosmos_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Cosmos DB is not configured")
     now = datetime.now(timezone.utc)
     user_id = user.get("preferred_username", user.get("oid", "unknown"))
     memory_id = f"mem-{uuid.uuid4().hex[:8]}"
@@ -79,7 +84,6 @@ async def create_memory(
         "status": "active",
         "appliedToRuns": [],
     }
-    client = get_cosmos_client()
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("memories")
     await container.create_item(body=doc)
@@ -93,8 +97,10 @@ async def update_memory(
     user: dict = Depends(require_role("Operator")),
 ) -> dict[str, Any]:
     """Update a memory instruction or status."""
-    user_id = user.get("preferred_username", user.get("oid", "unknown"))
     client = get_cosmos_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Cosmos DB is not configured")
+    user_id = user.get("preferred_username", user.get("oid", "unknown"))
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("memories")
     try:
@@ -118,8 +124,10 @@ async def delete_memory(
     user: dict = Depends(require_role("Operator")),
 ) -> None:
     """Delete a memory. Users can only delete their own memories."""
-    user_id = user.get("preferred_username", user.get("oid", "unknown"))
     client = get_cosmos_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Cosmos DB is not configured")
+    user_id = user.get("preferred_username", user.get("oid", "unknown"))
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("memories")
     try:

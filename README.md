@@ -133,6 +133,19 @@ See [docs/demo-environment.md](docs/demo-environment.md) for setup instructions.
 | Patch compliance rate | TBD | ≥ 95% |
 | CMDB accuracy | TBD | ≥ 98% |
 
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Architecture](docs/architecture.md) | Three-tier design, data flow, adapter layer |
+| [Demo Environment](docs/demo-environment.md) | ArcBox setup, demo stack, cost estimates |
+| [Demo Scenarios](docs/demos/README.md) | Step-by-step demo walkthroughs |
+| [Operations Portal](docs/portal.md) | Portal pages, API endpoints, Cosmos DB data model |
+| [SRE Agent Skills](docs/sre-skills.md) | Skill inventory, custom tools, SOP → skill mapping |
+| [SRE Agent Setup](docs/sre-agent-setup.md) | Step-by-step SRE Agent deployment and configuration |
+| [GLPI Setup](docs/glpi-setup.md) | GLPI ITSM/CMDB installation and configuration |
+| [Blog: Wintel Ops SRE Agent](docs/blog-wintel-ops-sre-agent.md) | Project overview blog post |
+
 ## License
 
 [MIT](LICENSE)

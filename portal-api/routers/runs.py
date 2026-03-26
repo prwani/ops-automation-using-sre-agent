@@ -20,6 +20,8 @@ async def list_runs(
 ) -> list[dict[str, Any]]:
     """List automation runs with optional filters."""
     client = get_cosmos_client()
+    if client is None:
+        return []
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("runs")
 
@@ -53,6 +55,8 @@ async def get_run(
 ) -> dict[str, Any]:
     """Get a specific run by ID."""
     client = get_cosmos_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Cosmos DB is not configured")
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("runs")
     query = "SELECT * FROM c WHERE c.id = @id"

@@ -3,7 +3,7 @@
 from datetime import date, datetime, timezone
 from typing import Any
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import require_role
 from cosmos_client import get_cosmos_client
@@ -24,6 +24,9 @@ async def submit_feedback(
     user: dict = Depends(require_role("Operator")),
 ) -> dict[str, Any]:
     """Submit feedback on an automation run."""
+    client = get_cosmos_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Cosmos DB is not configured")
     today = date.today().isoformat()
     feedback_id = f"fb-{today.replace('-','')}-{uuid.uuid4().hex[:6]}"
     doc: dict[str, Any] = {
@@ -36,7 +39,6 @@ async def submit_feedback(
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "processedIntoMemory": False,
     }
-    client = get_cosmos_client()
     db = client.get_database_client(settings.cosmos_database)
     container = db.get_container_client("feedback")
     await container.create_item(body=doc)

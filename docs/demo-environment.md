@@ -54,6 +54,8 @@ docker run -d --name glpi -p 8080:80 diouxx/glpi:latest
 
 **Adapter swap story:** "This is GLPI — a production-grade ITSM. In your environment, we swap one adapter for ManageEngine. Same REST pattern, different URL."
 
+See [glpi-setup.md](glpi-setup.md) for detailed GLPI installation and configuration instructions.
+
 ## SRE Agent Access to ArcBox VMs
 
 SRE Agent accesses Arc-enrolled VMs via its managed identity + RBAC:
@@ -92,7 +94,7 @@ Step 4: Configure + Verify
   ├─ Verify Defender compliance scans running
   └─ Verify SRE Agent can see all ArcBox VMs
 
-Step 5: Run Demo Scenarios (all using REAL data)
+Step 5: Run Demo Scenarios (all using REAL data — see demos/README.md for walkthroughs)
   ├─ Scenario A: Health check across all VMs → real report → AI summary
   ├─ Scenario B: Spike CPU + stop service → real alerts → SRE Agent triage → GLPI ticket
   ├─ Scenario C: Disable Defender agent → SRE Agent diagnoses via Arc Run Commands

@@ -166,6 +166,10 @@ React + TypeScript + Fluent UI frontend with FastAPI backend:
 
 See [portal.md](portal.md) for detailed page designs and data models.
 
+See [sre-skills.md](sre-skills.md) for the full skill inventory and custom tools.
+
+See [sre-agent-setup.md](sre-agent-setup.md) for the step-by-step SRE Agent deployment guide.
+
 ## Adapter Layer
 
 All external tool integrations go through swappable adapters:

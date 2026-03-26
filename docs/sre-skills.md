@@ -68,3 +68,5 @@ docs/sops/
 ```
 
 The SOP document is the source of truth. The skill is the executable version. When the SOP updates, the skill updates.
+
+See [sre-agent-setup.md](sre-agent-setup.md) for the full SRE Agent deployment guide including how to upload these skills.
