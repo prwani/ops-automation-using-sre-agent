@@ -47,7 +47,7 @@ def main(title: str, description: str, priority: str = "3") -> dict:
 
     # Create ticket via v2 API (no "input" wrapper for v2)
     resp = requests.post(
-        f"{GLPI_BASE}/api.php/v2/Ticket",
+        f"{GLPI_BASE}/api.php/v2.2/Assistance/Ticket",
         json={
             "name": title,
             "content": description,
@@ -110,7 +110,7 @@ def main(server_name: str) -> dict:
 
     # Search for computer by name via v2 API
     resp = requests.get(
-        f"{GLPI_BASE}/api.php/v2/Computer",
+        f"{GLPI_BASE}/api.php/v2.2/Assets/Computer",
         params={"filter": f"name=={server_name}"},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -129,3 +129,4 @@ def main(server_name: str) -> dict:
             }
 
     return {"found": False, "server_name": server_name, "message": "Not found in CMDB"}
+

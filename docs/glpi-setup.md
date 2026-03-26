@@ -101,7 +101,7 @@ Expected response:
 # List computers (CMDB)
 curl -s \
   -H "Authorization: Bearer <access_token>" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2/Computer" \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2.2/Assets/Computer" \
   | python -m json.tool
 
 # Create a ticket
@@ -109,7 +109,7 @@ curl -s -X POST \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "Test ticket", "content": "Testing API", "type": 1}' \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2/Ticket"
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2.2/Assistance/Ticket"
 ```
 
 > **Note:** GLPI 11 has two API versions:
@@ -270,9 +270,10 @@ done
 | **New API (v2)** | `http://.../api.php/v2/` (uses Bearer token) |
 | **Legacy API** | `http://.../apirest.php/` (uses App-Token + Session-Token) |
 | **API docs (Swagger)** | `http://.../api.php/doc` |
-| **Computers (CMDB)** | `GET/POST /api.php/v2/Computer` |
-| **Tickets** | `GET/POST /api.php/v2/Ticket` |
-| **Ticket categories** | `GET/POST /api.php/v2/ITILCategory` |
+| **Computers (CMDB)** | `GET/POST /api.php/v2.2/Assets/Computer` |
+| **Tickets** | `GET/POST /api.php/v2.2/Assistance/Ticket` |
+| **Ticket categories** | `GET/POST /api.php/v2.2/Assistance/ITILCategory` |
 | **DB host (ACI)** | `127.0.0.1` (NOT `localhost`) |
 | **DB credentials** | `glpi` / `GlpiPass2026!` / database `glpidb` |
+
 
