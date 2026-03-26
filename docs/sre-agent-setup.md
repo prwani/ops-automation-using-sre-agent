@@ -89,16 +89,17 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 3. Name: `wintel-health-check-investigation`
 4. Description: `Investigates Windows server health check failures and warnings reported by the automated health check system.`
 5. Copy the contents of `sre-skills/wintel-health-check-investigation/SKILL.md` into the SKILL.md editor
-6. Attach tools:
-   - `RunAzCliReadCommands` (built-in — also enables KQL queries via `az monitor log-analytics query`)
+6. Attach tools: `glpi-create-ticket` (custom — for escalation tickets)
 7. Click **Save**
+
+> **Note:** Built-in tools (Azure CLI, Log Analytics, diagnostics, remediation) are **automatically available** to all skills — you don't need to attach them. Only attach custom tools you created (GLPI, etc.).
 
 ### 4b: Security Agent Troubleshooting Skill
 
 1. Create skill: `security-agent-troubleshooting`
 2. Description: `Diagnoses and remediates Microsoft Defender for Endpoint agent issues on Windows servers.`
 3. Copy contents of `sre-skills/security-agent-troubleshooting/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`, `RunAzCliWriteCommands`
+4. Attach tools: `glpi-create-ticket`
 5. Save
 
 ### 4c: Patch Validation Skill
@@ -106,7 +107,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Create skill: `patch-validation`
 2. Description: `Validates server health before and after Windows patch deployment. Assesses rollback need.`
 3. Copy contents of `sre-skills/patch-validation/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`
+4. Attach tools: `glpi-create-ticket`
 5. Save
 
 ### 4d: Compliance Investigation Skill
@@ -114,7 +115,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Create skill: `compliance-investigation`
 2. Description: `Investigates non-compliant controls found by Microsoft Defender for Cloud AND Azure Policy, correlates findings across both sources, and prioritizes remediation.`
 3. Copy contents of `sre-skills/compliance-investigation/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`
+4. Attach tools: `glpi-create-ticket`
 5. Save
 
 ### 4e: VMware BAU Operations Skill
@@ -122,7 +123,7 @@ For each skill in `sre-skills/`, go to **Builder → Skills → Create skill**:
 1. Create skill: `vmware-bau-operations`
 2. Description: `Performs VMware/Hyper-V BAU tasks including snapshot cleanup, resource monitoring, and VM health checks.`
 3. Copy contents of `sre-skills/vmware-bau-operations/SKILL.md`
-4. Attach tools: `RunAzCliReadCommands`, `RunAzCliWriteCommands`
+4. Attach tools: `glpi-create-ticket`
 5. Save
 
 ## Step 5: Create Incident Response Plans
