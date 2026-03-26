@@ -1,4 +1,4 @@
-# Automating Wintel Operations with Azure SRE Agent: An Automation-First Approach
+# Automating Windows Server Operations with Azure SRE Agent: An Automation-First Approach
 
 > **How this blog is different from existing coverage:**
 >
@@ -7,11 +7,11 @@
 > - *"Reimagining AI Ops with Azure SRE Agent"* (Nov 2025) — sub-agent builder, MCP connectors, prebuilt scenarios
 > - *"What's New in GA Release"* (March 2026) — redesigned onboarding, deep context, ecosystem integrations
 >
-> **What this blog adds:** A real-world, end-to-end implementation for Wintel (Windows/VMware/Security) operations — with quantified automation coverage, SRE Agent Skills built from actual SOPs, and a working demo environment you can deploy today. We lead with automation, not AI.
+> **What this blog adds:** A real-world, end-to-end implementation for Windows Server / VMware / Security operations (sometimes called "Wintel" in enterprise IT) — with quantified automation coverage, SRE Agent Skills built from actual SOPs, and a working demo environment you can deploy today. We lead with automation, not AI.
 
 ## The Problem
 
-Wintel operations teams spend 15+ hours per week on manual health checks (30–45 min × 4/day), compliance reports (1 hr/day), alert monitoring (24/7), monthly patching (~9 hrs), and CMDB updates (~2 hrs/month). These tasks are repetitive, largely scriptable, and almost entirely undocumented — the procedures live in people's heads. When someone goes on leave, the team scrambles.
+Windows Server operations teams spend 15+ hours per week on manual health checks (30–45 min × 4/day), compliance reports (1 hr/day), alert monitoring (24/7), monthly patching (~9 hrs), and CMDB updates (~2 hrs/month). These tasks are repetitive, largely scriptable, and almost entirely undocumented — the procedures live in people's heads. When someone goes on leave, the team scrambles.
 
 ## Our Philosophy: Automation First, AI Where Needed
 
