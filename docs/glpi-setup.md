@@ -108,7 +108,7 @@ curl -s \
 curl -s -X POST \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "Test ticket", "content": "Testing API", "type": 1}}' \
+  -d '{"name": "Test ticket", "content": "Testing API", "type": 1}' \
   "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2/Ticket"
 ```
 
@@ -178,21 +178,21 @@ API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2"
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "ArcBox-Win2K22", "serial": "YOURSERIAL-WIN2K22", "comment": "Application server - Windows Server 2022"}}' \
+  -d '{"name": "ArcBox-Win2K22", "serial": "YOURSERIAL-WIN2K22", "comment": "Application server - Windows Server 2022"}' \
   "$API/Computer"
 
 # ArcBox-Win2K25 — File Server (deliberately stale OS for CMDB sync demo)
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "ArcBox-Win2K25", "serial": "YOURSERIAL-WIN2K25", "comment": "File server - Windows Server 2022 (DELIBERATELY STALE - actual OS is 2025)"}}' \
+  -d '{"name": "ArcBox-Win2K25", "serial": "YOURSERIAL-WIN2K25", "comment": "File server - Windows Server 2022 (DELIBERATELY STALE - actual OS is 2025)"}' \
   "$API/Computer"
 
 # ArcBox-SQL — Database Server
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "ArcBox-SQL", "serial": "YOURSERIAL-SQL", "comment": "Database server - Windows Server 2022 + SQL Server 2022"}}' \
+  -d '{"name": "ArcBox-SQL", "serial": "YOURSERIAL-SQL", "comment": "Database server - Windows Server 2022 + SQL Server 2022"}' \
   "$API/Computer"
 ```
 
@@ -238,7 +238,7 @@ API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2"
 PARENT_ID=$(curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "Wintel Ops", "comment": "Parent category for all Wintel operations"}}' \
+  -d '{"name": "Wintel Ops", "comment": "Parent category for all Wintel operations"}' \
   "$API/ITILCategory" \
   | python -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
@@ -252,7 +252,7 @@ for CAT in "Health Check:Daily health check alerts and reports" \
   curl -s -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"input\": {\"name\": \"$NAME\", \"itilcategories_id\": $PARENT_ID, \"comment\": \"$COMMENT\"}}" \
+    -d "{\"name\": \"$NAME\", \"itilcategories_id\": $PARENT_ID, \"comment\": \"$COMMENT\"}" \
     "$API/ITILCategory"
   echo ""
 done
@@ -275,3 +275,4 @@ done
 | **Ticket categories** | `GET/POST /api.php/v2/ITILCategory` |
 | **DB host (ACI)** | `127.0.0.1` (NOT `localhost`) |
 | **DB credentials** | `glpi` / `GlpiPass2026!` / database `glpidb` |
+
