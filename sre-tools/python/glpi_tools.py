@@ -15,7 +15,7 @@ Create each function as a SEPARATE Python tool in Builder > Tools > Python.
 
 
 def main(title: str, description: str, priority: str = "3") -> dict:
-    """Create an incident ticket in GLPI.
+    """Create an incident ticket in GLPI (v11 OAuth2 API).
 
     Args:
         title: Ticket title (e.g., "[Compliance] CIS Control 1.1 — 3 servers affected")
@@ -24,24 +24,30 @@ def main(title: str, description: str, priority: str = "3") -> dict:
     """
     import requests
 
-    GLPI_URL = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php"
-    APP_TOKEN = "your-app-token"  # Set in GLPI: Setup > General > API
-    USER_TOKEN = "your-user-token"  # Set in GLPI: User preferences > API token
+    GLPI_BASE = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io"
+    CLIENT_ID = "your-client-id"  # From Setup > OAuth Clients
+    CLIENT_SECRET = "your-client-secret"
+    USERNAME = "glpi"
+    PASSWORD = "your-admin-password"
 
-    # Init session
-    resp = requests.get(
-        f"{GLPI_URL}/initSession",
-        headers={
-            "App-Token": APP_TOKEN,
-            "Authorization": f"user_token {USER_TOKEN}",
+    # Get OAuth2 access token
+    resp = requests.post(
+        f"{GLPI_BASE}/api.php/token",
+        data={
+            "grant_type": "password",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "username": USERNAME,
+            "password": PASSWORD,
+            "scope": "api",
         },
     )
     resp.raise_for_status()
-    session_token = resp.json()["session_token"]
+    token = resp.json()["access_token"]
 
-    # Create ticket
+    # Create ticket via v2 API
     resp = requests.post(
-        f"{GLPI_URL}/Ticket",
+        f"{GLPI_BASE}/api.php/v2/Ticket",
         json={
             "input": {
                 "name": title,
@@ -53,8 +59,7 @@ def main(title: str, description: str, priority: str = "3") -> dict:
             }
         },
         headers={
-            "App-Token": APP_TOKEN,
-            "Session-Token": session_token,
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         },
     )
@@ -77,50 +82,51 @@ def main(title: str, description: str, priority: str = "3") -> dict:
 
 
 def main(server_name: str) -> dict:
-    """Query GLPI CMDB for server configuration item.
+    """Query GLPI CMDB for server configuration item (v11 OAuth2 API).
 
     Args:
         server_name: The server hostname to look up (e.g., "ArcBox-Win2K22")
     """
     import requests
 
-    GLPI_URL = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php"
-    APP_TOKEN = "your-app-token"
-    USER_TOKEN = "your-user-token"
+    GLPI_BASE = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io"
+    CLIENT_ID = "your-client-id"
+    CLIENT_SECRET = "your-client-secret"
+    USERNAME = "glpi"
+    PASSWORD = "your-admin-password"
 
-    # Init session
-    resp = requests.get(
-        f"{GLPI_URL}/initSession",
-        headers={
-            "App-Token": APP_TOKEN,
-            "Authorization": f"user_token {USER_TOKEN}",
+    # Get OAuth2 access token
+    resp = requests.post(
+        f"{GLPI_BASE}/api.php/token",
+        data={
+            "grant_type": "password",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "username": USERNAME,
+            "password": PASSWORD,
+            "scope": "api",
         },
     )
     resp.raise_for_status()
-    session_token = resp.json()["session_token"]
+    token = resp.json()["access_token"]
 
-    # Search for computer by name
+    # Search for computer by name via v2 API
     resp = requests.get(
-        f"{GLPI_URL}/Computer",
-        params={"searchText[1]": server_name, "range": "0-5"},
-        headers={
-            "App-Token": APP_TOKEN,
-            "Session-Token": session_token,
-        },
+        f"{GLPI_BASE}/api.php/v2/Computer",
+        params={"filter": f"name=={server_name}"},
+        headers={"Authorization": f"Bearer {token}"},
     )
 
-    if resp.status_code in (200, 206):
+    if resp.status_code == 200:
         items = resp.json()
         if items:
-            server = items[0]
+            server = items[0] if isinstance(items, list) else items
             return {
                 "found": True,
                 "ci_id": str(server.get("id")),
                 "name": server.get("name"),
                 "serial": server.get("serial"),
-                "os": server.get("operatingsystems_id"),
-                "location": server.get("locations_id"),
-                "state": server.get("states_id"),
+                "comment": server.get("comment"),
                 "last_update": server.get("date_mod"),
             }
 

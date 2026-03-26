@@ -48,73 +48,90 @@ environment. GLPI provides both **ITSM** (ticket management) and **CMDB**
 
 1. Navigate to **Setup → General**.
 2. Select the **API** tab.
-3. Set **Enable Rest API** to **Yes**.
-4. Click **Save**.
-
----
-
-## 4. Create a User API Token
-
-The user token authenticates API calls as a specific GLPI user.
-
-1. Click the **user icon** (top-right) → **My settings**.
-2. Scroll to the **Remote access keys** section.
-3. Next to **API token**, click **Regenerate**.
-4. Copy the generated token and store it securely. You will use it as `<user_token>`
-   in API calls.
+3. Set **Enable API** to **Yes**.
+4. Set **Enable Legacy REST API** to **Yes** (needed for legacy endpoints used by some tools).
 5. Click **Save**.
 
 ---
 
-## 5. Create an Application (App) Token
+## 4. Create an OAuth Client (GLPI 11 uses OAuth2)
 
-App tokens identify the calling application and are required alongside the user token.
+GLPI 11 uses **OAuth2** for API authentication (replacing the old App-Token/User-Token approach).
 
-1. Navigate to **Setup → General → API**.
-2. Under **API clients**, click **Add API client**.
+1. Navigate to **Setup → OAuth Clients**.
+2. Click **+ Add**.
 3. Fill in:
    - **Name:** `ops-automation`
    - **Active:** Yes
-   - **Filter access:** leave empty (allow all IPs) or restrict to your network
+   - **Grants:** check **Password** (for automated scripts)
+   - **Scopes:** check **api** (required for all API operations)
 4. Click **Add**.
-5. Copy the generated **App-Token** value and store it securely.
+5. Copy the generated **Client ID** and **Client Secret** — store them securely.
 
 ---
 
-## 6. Test the API
+## 5. Test the API (OAuth2 Password Grant)
 
-Verify that both tokens work by initiating a session:
+### Step 1: Get an access token
 
 ```bash
-curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Authorization: user_token <user_token>" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession"
+curl -s -X POST \
+  -d "grant_type=password" \
+  -d "client_id=<client_id>" \
+  -d "client_secret=<client_secret>" \
+  -d "username=glpi" \
+  -d "password=<your_admin_password>" \
+  -d "scope=api" \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/token"
 ```
 
 Expected response:
 
 ```json
 {
-  "session_token": "abc123def456..."
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGci..."
 }
 ```
 
-If you receive a `session_token`, the API is correctly configured. Use this token in
-the `Session-Token` header for subsequent API calls.
+### Step 2: Use the token for API calls
 
-To end the session:
+```bash
+# List computers (CMDB)
+curl -s \
+  -H "Authorization: Bearer <access_token>" \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2/Computer" \
+  | python -m json.tool
+
+# Create a ticket
+curl -s -X POST \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"name": "Test ticket", "content": "Testing API", "type": 1}}' \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2/Ticket"
+```
+
+> **Note:** GLPI 11 has two API versions:
+> - **New API (v2):** `http://.../api.php/v2/` — uses OAuth2 Bearer tokens
+> - **Legacy API:** `http://.../apirest.php/` — uses App-Token + Session-Token (still works if legacy API is enabled)
+
+### Legacy API (Alternative)
+
+If tools require the legacy App-Token/User-Token flow:
+
+1. Navigate to your user settings → look for **Remote access keys** → **API token** → Regenerate
+2. The legacy `initSession` endpoint still works:
 
 ```bash
 curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: <session_token>" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/killSession"
+  -H "Authorization: user_token <user_api_token>" \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession"
 ```
 
 ---
 
-## 7. Seed the CMDB with ArcBox Servers
+## 6. Seed the CMDB with ArcBox Servers
 
 The demo scenarios (especially [Scenario F — CMDB Sync](demos/scenario-f-cmdb-sync.md))
 require GLPI's CMDB to contain computer records for the ArcBox environment. Some
@@ -134,71 +151,60 @@ entries are **deliberately stale** so the sync demo can detect and fix discrepan
 
 > **Why the stale data?** `ArcBox-Win2K25` is intentionally recorded as Windows
 > Server 2022 instead of 2025. When you run Scenario F, the CMDB sync function detects
-> the mismatch against Azure Resource Graph and corrects it — demonstrating the
-> reconciliation workflow.
+> the mismatch against Azure Resource Graph and corrects it.
 
-### Option B: Programmatic Seeding via the API
+### Option B: Programmatic Seeding via the API (OAuth2)
 
-First, initiate a session:
+First, get an access token:
 
 ```bash
-SESSION=$(curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Authorization: user_token <user_token>" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession" \
-  | python -c "import sys,json; print(json.load(sys.stdin)['session_token'])")
+TOKEN=$(curl -s -X POST \
+  -d "grant_type=password" \
+  -d "client_id=<client_id>" \
+  -d "client_secret=<client_secret>" \
+  -d "username=glpi" \
+  -d "password=<your_admin_password>" \
+  -d "scope=api" \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/token" \
+  | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 ```
 
 Then create each computer:
 
 ```bash
+API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2"
+
 # ArcBox-Win2K22 — Application Server
 curl -s -X POST \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "ArcBox-Win2K22", "serial": "YOURSERIAL-WIN2K22", "operatingsystems_id": 1, "comment": "Application server - Windows Server 2022"}}' \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Computer"
+  -d '{"input": {"name": "ArcBox-Win2K22", "serial": "YOURSERIAL-WIN2K22", "comment": "Application server - Windows Server 2022"}}' \
+  "$API/Computer"
 
 # ArcBox-Win2K25 — File Server (deliberately stale OS for CMDB sync demo)
 curl -s -X POST \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "ArcBox-Win2K25", "serial": "YOURSERIAL-WIN2K25", "operatingsystems_id": 1, "comment": "File server - Windows Server 2022 (DELIBERATELY STALE - actual OS is 2025)"}}' \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Computer"
+  -d '{"input": {"name": "ArcBox-Win2K25", "serial": "YOURSERIAL-WIN2K25", "comment": "File server - Windows Server 2022 (DELIBERATELY STALE - actual OS is 2025)"}}' \
+  "$API/Computer"
 
 # ArcBox-SQL — Database Server
 curl -s -X POST \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"name": "ArcBox-SQL", "serial": "YOURSERIAL-SQL", "operatingsystems_id": 1, "comment": "Database server - Windows Server 2022 + SQL Server 2022"}}' \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Computer"
+  -d '{"input": {"name": "ArcBox-SQL", "serial": "YOURSERIAL-SQL", "comment": "Database server - Windows Server 2022 + SQL Server 2022"}}' \
+  "$API/Computer"
 ```
 
-Verify the records were created:
+Verify:
 
 ```bash
-curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Computer?range=0-10" \
-  | python -m json.tool
-```
-
-End the session when done:
-
-```bash
-curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/killSession"
+curl -s -H "Authorization: Bearer $TOKEN" "$API/Computer" | python -m json.tool
 ```
 
 ---
 
-## 8. Create Ticket Categories for Wintel Ops
+## 7. Create Ticket Categories for Wintel Ops
 
 Ticket categories ensure that automated ticket creation (Scenarios A, B, C) routes
 incidents to the correct queues.
@@ -217,23 +223,23 @@ incidents to the correct queues.
 | `Compliance` | `Wintel Ops` | Compliance deviations and audit findings |
 | `Patching` | `Wintel Ops` | Monthly patching issues and rollback requests |
 
-### Option B: Programmatic Creation via the API
+### Option B: Programmatic Creation via the API (OAuth2)
 
 ```bash
-# Initiate session (reuse from Step 7, or create a new one)
-SESSION=$(curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Authorization: user_token <user_token>" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession" \
-  | python -c "import sys,json; print(json.load(sys.stdin)['session_token'])")
+# Get token (reuse from Step 6, or get a new one)
+TOKEN=$(curl -s -X POST \
+  -d "grant_type=password&client_id=<client_id>&client_secret=<client_secret>&username=glpi&password=<password>&scope=api" \
+  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/token" \
+  | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2"
 
 # Create parent category: Wintel Ops
 PARENT_ID=$(curl -s -X POST \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"input": {"name": "Wintel Ops", "comment": "Parent category for all Wintel operations"}}' \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/ITILCategory" \
+  "$API/ITILCategory" \
   | python -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
 # Create sub-categories under Wintel Ops
@@ -244,19 +250,12 @@ for CAT in "Health Check:Daily health check alerts and reports" \
   NAME="${CAT%%:*}"
   COMMENT="${CAT#*:}"
   curl -s -X POST \
-    -H "App-Token: <app_token>" \
-    -H "Session-Token: $SESSION" \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"input\": {\"name\": \"$NAME\", \"itilcategories_id\": $PARENT_ID, \"comment\": \"$COMMENT\"}}" \
-    "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/ITILCategory"
+    "$API/ITILCategory"
   echo ""
 done
-
-# End session
-curl -s \
-  -H "App-Token: <app_token>" \
-  -H "Session-Token: $SESSION" \
-  "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/killSession"
 ```
 
 ---
@@ -267,9 +266,12 @@ curl -s \
 |------|-------|
 | **GLPI URL** | `http://glpi-opsauto-demo.swedencentral.azurecontainer.io` |
 | **Default admin** | `glpi` / `glpi` |
-| **API base** | `http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php` |
-| **Init session** | `GET /apirest.php/initSession` |
-| **Kill session** | `GET /apirest.php/killSession` |
-| **Computers** | `GET/POST /apirest.php/Computer` |
-| **Ticket categories** | `GET/POST /apirest.php/ITILCategory` |
-| **Tickets** | `GET/POST /apirest.php/Ticket` |
+| **OAuth2 token endpoint** | `POST /api.php/token` (grant_type=password) |
+| **New API (v2)** | `http://.../api.php/v2/` (uses Bearer token) |
+| **Legacy API** | `http://.../apirest.php/` (uses App-Token + Session-Token) |
+| **API docs (Swagger)** | `http://.../api.php/doc` |
+| **Computers (CMDB)** | `GET/POST /api.php/v2/Computer` |
+| **Tickets** | `GET/POST /api.php/v2/Ticket` |
+| **Ticket categories** | `GET/POST /api.php/v2/ITILCategory` |
+| **DB host (ACI)** | `127.0.0.1` (NOT `localhost`) |
+| **DB credentials** | `glpi` / `GlpiPass2026!` / database `glpidb` |
