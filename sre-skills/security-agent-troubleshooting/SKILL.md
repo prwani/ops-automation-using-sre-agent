@@ -7,9 +7,8 @@ triggers:
   - Defender device health shows "not reporting" for >30 minutes
   - User reports Defender not working on a server
 tools:
-  - arc-run-command
-  - defender-get-agent-health
-  - defender-get-security-alerts
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
   - glpi-create-ticket
   - glpi-query-cmdb
 sop_source: docs/sops/security-agent-troubleshooting.md
@@ -26,7 +25,7 @@ This skill handles Defender for Endpoint agent health issues. The agent (MdCoreS
 ### Step 1 — Get current agent health from Defender API
 
 ```
-defender-get-agent-health(server_id=<server_id>)
+RunAzCliReadCommands(server_id=<server_id>)
 ```
 
 Check: `onboardingStatus`, `healthStatus`, `lastSeen`, `agentVersion`.
@@ -34,7 +33,7 @@ Check: `onboardingStatus`, `healthStatus`, `lastSeen`, `agentVersion`.
 ### Step 2 — Run local agent check via Arc
 
 ```
-arc-run-command(server_id=<server_id>, script="""
+RunAzCliReadCommands(server_id=<server_id>, script="""
 $svc = Get-Service MdCoreSvc -ErrorAction SilentlyContinue
 $mde = Get-Service "Sense" -ErrorAction SilentlyContinue
 @{
@@ -48,7 +47,7 @@ $mde = Get-Service "Sense" -ErrorAction SilentlyContinue
 ### Step 3 — Check network connectivity to Defender endpoints
 
 ```
-arc-run-command(server_id=<server_id>, script="""
+RunAzCliReadCommands(server_id=<server_id>, script="""
 $endpoints = @(
   "winatp-gw-eus.microsoft.com",
   "winatp-gw-neu.microsoft.com", 
@@ -66,8 +65,8 @@ $results | ConvertTo-Json
 
 | Finding | Remediation |
 |---|---|
-| MdCoreSvc stopped | `arc-run-command(script="Restart-Service MdCoreSvc -Force")` |
-| Sense stopped | `arc-run-command(script="Restart-Service Sense -Force")` |
+| MdCoreSvc stopped | `RunAzCliWriteCommands(script="Restart-Service MdCoreSvc -Force")` |
+| Sense stopped | `RunAzCliWriteCommands(script="Restart-Service Sense -Force")` |
 | Network unreachable | Create P2 firewall change ticket in GLPI |
 | Agent not onboarded | Run onboarding package via Arc Run Command |
 | Agent version outdated | Trigger Update Manager patch for security updates |

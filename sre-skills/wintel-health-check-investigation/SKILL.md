@@ -7,7 +7,8 @@ triggers:
   - Alert from Azure Monitor: disk, CPU, memory, or service threshold exceeded
   - User asks about a server health issue
 tools:
-  - arc-run-command
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
   - query-perf-trends
   - cosmos-query-runs
   - cosmos-check-memories
@@ -49,19 +50,19 @@ Run the appropriate diagnostic script via Arc Run Command based on the failing c
 
 **Disk:**
 ```
-arc-run-command(server_id=<server_id>, script=scripts/check_disk.ps1)
+RunAzCliReadCommands(server_id=<server_id>, script=scripts/check_disk.ps1)
 ```
 If disk >90%: Identify largest directories, check for log file accumulation, orphaned temp files.
 
 **Services:**
 ```
-arc-run-command(server_id=<server_id>, script=scripts/check_services.ps1)
+RunAzCliReadCommands(server_id=<server_id>, script=scripts/check_services.ps1)
 ```
 If service stopped: Check if restart resolves it. Check Event Log for crash reason.
 
 **Event Log:**
 ```
-arc-run-command(server_id=<server_id>, script=scripts/check_eventlog.ps1, args="-HoursBack 6")
+RunAzCliReadCommands(server_id=<server_id>, script=scripts/check_eventlog.ps1, args="-HoursBack 6")
 ```
 For errors found: Check Event ID, source, and message pattern.
 

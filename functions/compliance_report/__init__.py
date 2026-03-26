@@ -26,18 +26,21 @@ def compliance_report(timer: func.TimerRequest) -> None:
     """Generate daily compliance report from Defender for Cloud."""
     logging.info("Compliance report function triggered")
 
-    credential = ManagedIdentityCredential()
-    cosmos_client = CosmosClient(
-        url=os.environ["COSMOS_ENDPOINT"],
-        credential=credential,
-    )
+    try:
+        credential = ManagedIdentityCredential()
+        cosmos_client = CosmosClient(
+            url=os.environ["COSMOS_ENDPOINT"],
+            credential=credential,
+        )
 
-    engine = ComplianceEngine(
-        defender_adapter=get_defender_adapter(),
-        cosmos_client=cosmos_client,
-        cosmos_database=os.environ.get("COSMOS_DATABASE", "ops-automation"),
-    )
+        engine = ComplianceEngine(
+            defender_adapter=get_defender_adapter(),
+            cosmos_client=cosmos_client,
+            cosmos_database=os.environ.get("COSMOS_DATABASE", "ops-automation"),
+        )
 
-    import asyncio
-    report = asyncio.run(engine.run_daily_report(subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]))
-    logging.info("Compliance report complete. Secure score: %.1f", report.get("secure_score", 0))
+        import asyncio
+        report = asyncio.run(engine.run_daily_report(subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]))
+        logging.info("Compliance report complete. Secure score: %.1f", report.get("secure_score", 0))
+    except Exception:
+        logging.exception("Compliance report function failed")

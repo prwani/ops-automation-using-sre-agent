@@ -27,22 +27,25 @@ def health_check(timer: func.TimerRequest) -> None:
     """Run health checks on all Arc-enrolled servers."""
     logging.info("Health check function triggered")
 
-    credential = ManagedIdentityCredential()
-    arc_adapter = get_arc_adapter()
+    try:
+        credential = ManagedIdentityCredential()
+        arc_adapter = get_arc_adapter()
 
-    cosmos_client = CosmosClient(
-        url=os.environ["COSMOS_ENDPOINT"],
-        credential=credential,
-    )
-    logs_client = LogsQueryClient(credential=credential)
+        cosmos_client = CosmosClient(
+            url=os.environ["COSMOS_ENDPOINT"],
+            credential=credential,
+        )
+        logs_client = LogsQueryClient(credential=credential)
 
-    engine = HealthCheckEngine(
-        arc_adapter=arc_adapter,
-        log_analytics_client=logs_client,
-        cosmos_client=cosmos_client,
-        workspace_id=os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", ""),
-    )
+        engine = HealthCheckEngine(
+            arc_adapter=arc_adapter,
+            log_analytics_client=logs_client,
+            cosmos_client=cosmos_client,
+            workspace_id=os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", ""),
+        )
 
-    import asyncio
-    results = asyncio.run(engine.run_all_servers())
-    logging.info("Health check complete. Servers checked: %d", len(results))
+        import asyncio
+        results = asyncio.run(engine.run_all_servers())
+        logging.info("Health check complete. Servers checked: %d", len(results))
+    except Exception:
+        logging.exception("Health check function failed")

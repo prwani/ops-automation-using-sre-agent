@@ -8,7 +8,8 @@ triggers:
   - Alert: VM snapshot count >5 or snapshot age >7 days
   - User requests VM health status
 tools:
-  - arc-run-command
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
   - query-perf-trends
   - glpi-create-ticket
   - cosmos-query-runs
@@ -21,7 +22,7 @@ sop_source: docs/sops/vmware-bau.md
 
 ### List all checkpoints
 ```
-arc-run-command(server_id=<hyperv_host_id>, script="""
+RunAzCliReadCommands(server_id=<hyperv_host_id>, script="""
 Get-VM | ForEach-Object {
   $vm = $_
   Get-VMCheckpoint -VMName $vm.Name | ForEach-Object {
@@ -44,7 +45,7 @@ Get-VM | ForEach-Object {
 
 ### Remove old checkpoint
 ```
-arc-run-command(server_id=<hyperv_host_id>, script="""
+RunAzCliWriteCommands(server_id=<hyperv_host_id>, script="""
 Remove-VMCheckpoint -VMName "<vm_name>" -Name "<checkpoint_name>" -Confirm:$false
 """)
 ```

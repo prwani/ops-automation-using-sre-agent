@@ -7,7 +7,8 @@ triggers:
   - Pre-patch validation required before maintenance window
   - User requests post-patch verification
 tools:
-  - arc-run-command
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
   - query-update-compliance
   - cosmos-query-runs
   - glpi-create-ticket
@@ -22,7 +23,7 @@ Run before any patch deployment:
 
 ### Check 1 — Disk space (>20% free required)
 ```
-arc-run-command(server_id=<server_id>, script=scripts/check_disk.ps1)
+RunAzCliReadCommands(server_id=<server_id>, script=scripts/check_disk.ps1)
 ```
 **Block if** C: drive free < 20%.
 
@@ -34,7 +35,7 @@ Check for open P1/P2 incidents. **Block if** open critical incident exists.
 
 ### Check 3 — Services baseline
 ```
-arc-run-command(server_id=<server_id>, script=scripts/check_services.ps1)
+RunAzCliReadCommands(server_id=<server_id>, script=scripts/check_services.ps1)
 ```
 Record pre-patch service state as baseline.
 
@@ -44,7 +45,7 @@ Run after patch deployment completes:
 
 ### Check 1 — Reboot completed
 ```
-arc-run-command(server_id=<server_id>, script="(Get-CimInstance Win32_OperatingSystem).LastBootUpTime | ConvertTo-Json")
+RunAzCliReadCommands(server_id=<server_id>, script="(Get-CimInstance Win32_OperatingSystem).LastBootUpTime | ConvertTo-Json")
 ```
 Verify reboot time is after patch deployment start time.
 
@@ -53,7 +54,7 @@ Compare against pre-patch baseline. Any service that was Running and is now Stop
 
 ### Check 3 — Event log clean
 ```
-arc-run-command(server_id=<server_id>, script=scripts/check_eventlog.ps1, args="-HoursBack 2")
+RunAzCliReadCommands(server_id=<server_id>, script=scripts/check_eventlog.ps1, args="-HoursBack 2")
 ```
 Any Critical events post-patch = **WARN**. Crash dump events = **FAIL → rollback**.
 

@@ -71,7 +71,7 @@ Categorize:
 
 ### Step 4 — Spot-check on a server
 ```
-arc-run-command(server_id=<affected_server_id>, script=<control-specific check>)
+RunAzCliReadCommands(server_id=<affected_server_id>, script=<control-specific check>)
 ```
 
 Common checks:
