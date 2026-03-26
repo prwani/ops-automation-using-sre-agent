@@ -113,7 +113,7 @@ curl -s -X POST \
 ```
 
 > **Note:** GLPI 11 has two API versions:
-> - **New API (v2):** `http://.../api.php/v2/` — uses OAuth2 Bearer tokens
+> - **New API (v2):** `http://.../api.php/v2.2/` — uses OAuth2 Bearer tokens
 > - **Legacy API:** `http://.../apirest.php/` — uses App-Token + Session-Token (still works if legacy API is enabled)
 
 ### Legacy API (Alternative)
@@ -172,34 +172,34 @@ TOKEN=$(curl -s -X POST \
 Then create each computer:
 
 ```bash
-API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2"
+API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2.2"
 
 # ArcBox-Win2K22 — Application Server
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ArcBox-Win2K22", "serial": "YOURSERIAL-WIN2K22", "comment": "Application server - Windows Server 2022"}' \
-  "$API/Computer"
+  "$API/Assets/Computer"
 
 # ArcBox-Win2K25 — File Server (deliberately stale OS for CMDB sync demo)
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ArcBox-Win2K25", "serial": "YOURSERIAL-WIN2K25", "comment": "File server - Windows Server 2022 (DELIBERATELY STALE - actual OS is 2025)"}' \
-  "$API/Computer"
+  "$API/Assets/Computer"
 
 # ArcBox-SQL — Database Server
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ArcBox-SQL", "serial": "YOURSERIAL-SQL", "comment": "Database server - Windows Server 2022 + SQL Server 2022"}' \
-  "$API/Computer"
+  "$API/Assets/Computer"
 ```
 
 Verify:
 
 ```bash
-curl -s -H "Authorization: Bearer $TOKEN" "$API/Computer" | python -m json.tool
+curl -s -H "Authorization: Bearer $TOKEN" "$API/Assets/Computer" | python -m json.tool
 ```
 
 ---
@@ -232,14 +232,14 @@ TOKEN=$(curl -s -X POST \
   "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/token" \
   | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2"
+API="http://glpi-opsauto-demo.swedencentral.azurecontainer.io/api.php/v2.2"
 
 # Create parent category: Wintel Ops
 PARENT_ID=$(curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "Wintel Ops", "comment": "Parent category for all Wintel operations"}' \
-  "$API/ITILCategory" \
+  "$API/Dropdowns/ITILCategory" \
   | python -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
 # Create sub-categories under Wintel Ops
@@ -253,7 +253,7 @@ for CAT in "Health Check:Daily health check alerts and reports" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"name\": \"$NAME\", \"itilcategories_id\": $PARENT_ID, \"comment\": \"$COMMENT\"}" \
-    "$API/ITILCategory"
+    "$API/Dropdowns/ITILCategory"
   echo ""
 done
 ```
@@ -267,13 +267,15 @@ done
 | **GLPI URL** | `http://glpi-opsauto-demo.swedencentral.azurecontainer.io` |
 | **Default admin** | `glpi` / `glpi` |
 | **OAuth2 token endpoint** | `POST /api.php/token` (grant_type=password) |
-| **New API (v2)** | `http://.../api.php/v2/` (uses Bearer token) |
+| **New API (v2)** | `http://.../api.php/v2.2/` (uses Bearer token) |
 | **Legacy API** | `http://.../apirest.php/` (uses App-Token + Session-Token) |
 | **API docs (Swagger)** | `http://.../api.php/doc` |
 | **Computers (CMDB)** | `GET/POST /api.php/v2.2/Assets/Computer` |
 | **Tickets** | `GET/POST /api.php/v2.2/Assistance/Ticket` |
-| **Ticket categories** | `GET/POST /api.php/v2.2/Assistance/ITILCategory` |
+| **Ticket categories** | `GET/POST /api.php/v2.2/Dropdowns/ITILCategory` |
 | **DB host (ACI)** | `127.0.0.1` (NOT `localhost`) |
-| **DB credentials** | `glpi` / `GlpiPass2026!` / database `glpidb` |
+| **DB credentials** | `glpi` / `GlpiPass2026!` (or as set in ACI container) / database `glpidb`` |
+
+
 
 
