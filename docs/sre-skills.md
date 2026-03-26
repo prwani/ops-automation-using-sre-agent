@@ -41,22 +41,19 @@ The KQL files in `sre-tools/kusto/` are **reference queries**, not standalone to
 | `query-compliance-state.kql` | Regulatory compliance status from Resource Graph | `RunAzCliReadCommands` → `az graph query` |
 | `query-update-compliance.kql` | Missing patches by server/classification | `RunAzCliReadCommands` → `az monitor log-analytics query` |
 
-### Python Tools (GLPI + Cosmos DB Only)
+### Python Tools (GLPI Only)
 
 | Tool | Purpose |
 |---|---|
 | `glpi-create-ticket` | Create incident in GLPI (or ManageEngine in production) |
 | `glpi-query-cmdb` | Query CMDB for server CI record (owner, role, environment) |
 | `generate-compliance-report` | Generate HTML/PDF compliance report from Defender data |
-| `cosmos-query-runs` | Query Cosmos DB for automation run history |
-| `cosmos-check-memories` | Check active memory/suppression rules for a server+task |
 
 ### MCP Server Integrations
 
 | MCP Server | Provides |
 |---|---|
 | GLPI MCP Server | Ticket CRUD, CMDB queries, SLA status |
-| Operations Portal MCP | Run history, memory management |
 
 ## SOP → Skill Mapping
 

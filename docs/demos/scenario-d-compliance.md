@@ -105,7 +105,7 @@ Shows each control family (e.g., "Enable MFA", "Apply system updates") with curr
 
 ## Phase 2: AI Adds the Remaining ~5%
 
-### What SRE Agent/Foundry solves
+### What SRE Agent solves
 
 The SRE Agent sits on top of the deterministic pipeline and adds the thin layer of intelligence that turns data into actionable insight:
 

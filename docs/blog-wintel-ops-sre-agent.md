@@ -29,30 +29,28 @@ Before reaching for AI, we asked a simple question for each operational requirem
 | 8 | Quarterly Hardening | ~80% | Optional — audit narrative |
 | 9 | CMDB Updates | ~85% | No |
 
-**The key insight: 7 of 9 requirements are fully served by deterministic automation.** SRE Agent earns its place on the 2 tasks that genuinely need judgment — alert triage (correlating multiple signals into a root cause) and security troubleshooting (diagnosing why a Defender agent went silent). For everything else, a well-written Azure Function with the right adapter is faster, cheaper, and more predictable than any LLM.
+**The key insight: 7 of 9 requirements are fully served by deterministic automation.** SRE Agent earns its place on the 2 tasks that genuinely need judgment — alert triage (correlating multiple signals into a root cause) and security troubleshooting (diagnosing why a Defender agent went silent). For everything else, a well-written PowerShell script with the right adapter is faster, cheaper, and more predictable than any LLM.
 
 This isn't about avoiding AI. It's about not using a $0.03/call reasoning engine to check whether a Windows service is running.
 
 ## The Architecture
 
-We built a 3-tier system where each tier does what it's best at:
+We built a 2-tier system where each tier does what it's best at:
 
 ```
-Tier 3: Azure SRE Agent — Incident response, alert triage, security diagnostics
+Tier 2: Azure SRE Agent — Incident response, alert triage, security diagnostics,
+  │      compliance analysis, patch risk, trend detection
   │      Skills (AgentSkills.io) + Custom tools + Runbooks + Memory
   │
-Tier 2: Azure AI Foundry Agents + Workflows — Analysis & reporting
-  │      Compliance Analyst, Patch Risk, Health Insights, Ops Chat
-  │
-Tier 1: Azure Functions — Deterministic automation (the workhorse)
+Tier 1: PowerShell Scripts — Deterministic automation (the workhorse)
          Health checks, compliance pulls, CMDB sync, patching, VMware BAU
-         Adapter Layer → Arc, Defender, ITSM, CMDB, Update Manager
+         Adapter Layer → Arc, Defender, GLPI ITSM/CMDB, Update Manager
   │
   ▼
 Azure Arc-enrolled servers (on-prem + cloud + VMware)
 ```
 
-**Azure Arc** is the hybrid bridge — every on-prem and VMware server is Arc-enrolled, giving us Run Commands, Azure Monitor Agent, Update Manager, and Policy from a single control plane. **Defender for Cloud** provides security posture management, CIS compliance baselines, and agent health monitoring. **Azure Functions** handle the scheduled automation (health checks 4×/day, compliance pulls daily, CMDB sync monthly). When a Function detects something it can't handle — an alert storm, a failed Defender agent — it escalates to **SRE Agent**.
+**Azure Arc** is the hybrid bridge — every on-prem and VMware server is Arc-enrolled, giving us Run Commands, Azure Monitor Agent, Update Manager, and Policy from a single control plane. **Defender for Cloud** provides security posture management, CIS compliance baselines, and agent health monitoring. **PowerShell scripts** handle the scheduled automation (health checks 4×/day, compliance pulls daily, CMDB sync monthly). When a script detects something it can't handle — an alert storm, a failed Defender agent — it escalates to **SRE Agent**.
 
 For the full architecture with data flow diagrams and adapter details, see [architecture.md](architecture.md).
 
@@ -89,8 +87,6 @@ triggers:
 tools:
   - arc-run-command
   - query-perf-trends
-  - cosmos-query-runs
-  - cosmos-check-memories
   - glpi-create-ticket
 sop_source: docs/sops/daily-health-check.md
 ---
@@ -98,7 +94,7 @@ sop_source: docs/sops/daily-health-check.md
 # Wintel Health Check Investigation
 
 ## Step 1 — Identify the affected server and check type
-Query the most recent health check run from Cosmos DB...
+Query the most recent health check run...
 
 ## Step 2 — Check for active suppression rules
 Before investigating, verify if there is an active suppression memory...
@@ -125,9 +121,9 @@ This is the "aha moment" for stakeholders. The contrast tells the story:
 
 **Before:** An engineer SSHes/RDPs into each server, runs `Get-PSDrive`, checks services, scans event logs, copies results into a spreadsheet. Repeat for every server. **45 minutes per cycle, 4 cycles per day.**
 
-**After:** An Azure Function fires on a timer, runs health checks across all Arc-enrolled servers via Run Commands in parallel, and writes structured results to Cosmos DB. **30 seconds, zero human effort.**
+**After:** A PowerShell script (`scripts/demo-a-health-check.ps1`) runs health checks across all Arc-enrolled servers via Run Commands in parallel, evaluates thresholds, and generates a structured report. **30 seconds, zero human effort.**
 
-But here's where SRE Agent adds value that automation alone can't: the Function reports "Disk at 88% on SRV-DB — WARNING." A human glances at that and moves on. SRE Agent queries the performance trend data via KQL, sees that disk has been growing at 3% per week, and reports: *"Disk on SRV-DB is at 88% and growing ~3%/week. At current rate, it will breach 95% in approximately 5 days. Recommend scheduling cleanup or capacity increase this week."*
+But here's where SRE Agent adds value that automation alone can't: the script reports "Disk at 88% on SRV-DB — WARNING." A human glances at that and moves on. SRE Agent queries the performance trend data via KQL, sees that disk has been growing at 3% per week, and reports: *"Disk on SRV-DB is at 88% and growing ~3%/week. At current rate, it will breach 95% in approximately 5 days. Recommend scheduling cleanup or capacity increase this week."*
 
 That's the difference between monitoring and *insight* — and it's the kind of judgment that earns AI its place in the stack.
 
@@ -137,7 +133,7 @@ We built 7 demo scenarios covering health checks, alert triage, security agent t
 
 You don't need a production environment to prove this out. [Azure Jumpstart ArcBox for IT Pros](https://jumpstart.azure.com/azure_jumpstart_arcbox/ITPro) deploys a full simulated datacenter — 5 Arc-enrolled VMs (Windows Server 2022, 2025, SQL Server, Ubuntu) — in a single Azure subscription via Bicep. Add GLPI (open-source ITSM+CMDB) in a Docker container, enable Defender for Cloud, and you have a working demo environment in under an hour.
 
-**13 of 14 components are real** — same Azure Arc, same Defender for Cloud, same SRE Agent, same Azure Functions you'd use in production. The only demo-specific component is GLPI standing in for ManageEngine. When you move to production, you swap one adapter (`glpi_adapter` → `manageengine_adapter`). Everything else stays identical.
+**13 of 14 components are real** — same Azure Arc, same Defender for Cloud, same SRE Agent you'd use in production. The only demo-specific component is GLPI standing in for ManageEngine. When you move to production, you swap one adapter (`glpi_adapter` → `manageengine_adapter`). Everything else stays identical.
 
 Estimated cost: **~$50–80/month** if you shut down VMs when not demoing. Defender for Cloud offers a 30-day free trial.
 
@@ -145,7 +141,7 @@ For full setup instructions, see [demo-environment.md](demo-environment.md).
 
 ## What We Learned
 
-**Start with automation — get the 85–90% win first.** The temptation is to lead with AI because it demos well. Resist it. A cron-triggered Azure Function that runs health checks in 30 seconds is more valuable than the world's smartest AI agent that takes 2 minutes and costs $0.15 per run. Get the deterministic wins locked in, then layer AI on the gaps.
+**Start with automation — get the 85–90% win first.** The temptation is to lead with AI because it demos well. Resist it. A scheduled PowerShell script that runs health checks in 30 seconds is more valuable than the world's smartest AI agent that takes 2 minutes and costs $0.15 per run. Get the deterministic wins locked in, then layer AI on the gaps.
 
 **SOPs → Skills is the killer pattern for SRE Agent adoption.** Most teams already have procedures — they're just in wikis, runbooks, or (worst case) someone's head. The hardest part isn't building the skill; it's getting the SOP documented. Once it's written down, converting it to a SKILL.md with YAML frontmatter and tool references is straightforward.
 
@@ -161,4 +157,4 @@ The full implementation is open source:
 - **Start here:** [architecture.md](architecture.md) for the system design, [sre-agent-setup.md](sre-agent-setup.md) for SRE Agent configuration, [demo-environment.md](demo-environment.md) for the sandbox setup
 - **SRE Agent portal:** [https://sre.azure.com](https://sre.azure.com)
 
-The repo includes all Azure Function code, SRE Agent skills, Foundry Agent definitions, adapter implementations, Bicep infrastructure templates, and an Operations Portal (React + FastAPI). Everything you need to go from "we do this manually" to "this runs itself" — with AI adding judgment where it genuinely matters.
+The repo includes all PowerShell demo scripts, SRE Agent skills, adapter implementations, Bicep infrastructure templates, and GLPI integration. Everything you need to go from "we do this manually" to "this runs itself" — with AI adding judgment where it genuinely matters.

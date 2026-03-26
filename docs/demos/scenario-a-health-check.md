@@ -40,7 +40,7 @@ This is done **four times per day** (06:00, 12:00, 18:00, 00:00 UTC). It does no
 
 ### What It Solves
 
-Deterministic automation replaces every manual step listed above. It runs on a timer (Azure Function, 4×/day), executes predefined health-check scripts on all five servers via **Azure Arc Run Commands**, evaluates results against fixed thresholds, produces a structured report, and auto-creates ITSM tickets for any WARNING or CRITICAL findings — all without human intervention.
+Deterministic automation replaces every manual step listed above. It runs on a schedule (PowerShell script `scripts/demo-a-health-check.ps1`, 4×/day), executes predefined health-check scripts on all five servers via **Azure Arc Run Commands**, evaluates results against fixed thresholds, produces a structured report, and auto-creates ITSM tickets for any WARNING or CRITICAL findings — all without human intervention.
 
 ### Thresholds
 
@@ -280,7 +280,7 @@ done
 
 #### 8. Automated Threshold Evaluation
 
-In production this runs inside the Azure Function (`HealthCheckEngine`). For the demo, simulate evaluation with this PowerShell snippet:
+In production this runs inside the PowerShell script (`scripts/demo-a-health-check.ps1`). For the demo, simulate evaluation with this PowerShell snippet:
 
 ```powershell
 # Simulated threshold evaluation (runs after data collection)
@@ -310,7 +310,7 @@ Write-Output "Disk $($diskResult.Drive): $($diskResult.UsedPercent)% used → $s
 
 #### 9. Auto-Generated Report
 
-The automation produces a structured report stored in Cosmos DB (`health-runs` container). Example output:
+The automation produces a structured report. Example output:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
@@ -407,7 +407,7 @@ Even with full automation, the following gaps remain:
 
 ### What SRE Agent / AI Solves
 
-The SRE Agent sits on top of the automation layer. It consumes the **same data** the automation already collected (health-check results in Cosmos DB, performance trends in Log Analytics) and adds:
+The SRE Agent sits on top of the automation layer. It consumes the **same data** the automation already collected (health-check results, performance trends in Log Analytics) and adds:
 
 - **Root-cause interpretation** — "Disk E: on ArcBox-SQL is filling because SQL transaction logs are not being truncated"
 - **Trend projection** — "At current growth rate, disk will hit 95% in ~5 days"
@@ -421,7 +421,7 @@ The SRE Agent sits on top of the automation layer. It consumes the **same data**
 
 #### 1. Ask the SRE Agent
 
-Open the SRE Agent at [sre.azure.com](https://sre.azure.com) (or the demo portal chat) and type:
+Open the SRE Agent at [sre.azure.com](https://sre.azure.com) and type:
 
 > **"Check the health of all my Arc servers and summarize."**
 
@@ -434,25 +434,19 @@ The SRE Agent activates the **`wintel-health-check-investigation`** skill.
 The agent executes the following sequence (visible in the activity trace):
 
 ```
-1. cosmos-query-runs(taskType="health_check", status="WARNING,CRITICAL", limit=10)
-   → Retrieves latest health-check results (from Phase 1 automation)
-
-2. query-perf-trends(server_id="ArcBox-SQL", metric="disk", hours=168)
+1. query-perf-trends(server_id="ArcBox-SQL", metric="disk", hours=168)
    → Pulls 7-day disk usage trend from Log Analytics
 
-3. query-perf-trends(server_id="ArcBox-SQL", metric="memory", hours=168)
+2. query-perf-trends(server_id="ArcBox-SQL", metric="memory", hours=168)
    → Pulls 7-day memory trend
 
-4. query-perf-trends(server_id="ArcBox-Win2K22", metric="memory", hours=168)
+3. query-perf-trends(server_id="ArcBox-Win2K22", metric="memory", hours=168)
    → Pulls 7-day memory trend for cross-correlation
 
-5. arc-run-command(server_id="ArcBox-SQL", script="scripts/check_disk.ps1")
+4. arc-run-command(server_id="ArcBox-SQL", script="scripts/check_disk.ps1")
    → Live disk check for current state
 
-6. cosmos-check-memories(server_id="ArcBox-SQL", check_type="disk")
-   → Checks if there's a known suppression or context for this server
-
-7. glpi-create-ticket(
+5. glpi-create-ticket(
        title="[Health Check] ArcBox-SQL: Disk E: trending to 95% in 5 days",
        description="<enriched analysis with trend data and probable cause>",
        priority="2",
@@ -505,7 +499,7 @@ Automation created three separate tickets. The SRE Agent connects the dots:
 
 #### 6. Natural-Language Daily Brief
 
-The agent generates a morning brief (also delivered via the `daily-brief` workflow at 07:00 UTC):
+The agent generates a morning brief (also deliverable via a scheduled task at 07:00 UTC):
 
 > ### 🟡 Morning Health Brief — 15 Jan 2025
 >
@@ -556,16 +550,16 @@ After asking the SRE Agent to check health:
 - **Activity trace** — the tool calls the agent made (visible in sre.azure.com sidebar)
 - **Trend charts** — 7-day disk/memory/CPU trends pulled from Log Analytics
 - **Enriched tickets** — GLPI tickets updated with probable cause and recommended actions
-- **Daily brief** — the natural-language summary shown in step 6 above (also visible in the ops portal dashboard)
+- **Daily brief** — the natural-language summary shown in step 6 above
 
-### Portal Dashboard
+### Portal View
 
-The ops portal at `https://portal-opsauto-demo.swedencentral.azurecontainer.io` shows:
+The SRE Agent chat at [sre.azure.com](https://sre.azure.com) shows:
 
-- **Dashboard** — today's health-check run cards with 🟢/🟡/🔴 indicators
-- **History** — paginated list of all health-check runs with filters
-- **Chat** — streaming conversation with the Ops Chat Agent
-- **Memories** — active suppression rules and knowledge entries
+- **Activity trace** — the tool calls the agent made (visible in the sidebar)
+- **Trend charts** — 7-day disk/memory/CPU trends pulled from Log Analytics
+- **Enriched tickets** — GLPI tickets updated with probable cause and recommended actions
+- **Daily brief** — the natural-language summary shown in step 6 above
 
 ---
 

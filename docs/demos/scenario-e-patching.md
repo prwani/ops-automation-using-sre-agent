@@ -149,7 +149,7 @@ az connectedmachine run-command create \
 
 ## Phase 2: AI Adds the Remaining ~15%
 
-The **Patch Risk Agent** brings intelligence to what is otherwise a mechanical process.
+The **SRE Agent** brings intelligence to what is otherwise a mechanical process.
 
 ### What AI adds
 

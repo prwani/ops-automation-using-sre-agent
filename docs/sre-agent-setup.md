@@ -29,7 +29,7 @@ Instead of manual RBAC commands, add resource groups directly in the SRE Agent s
 | Resource Group | Purpose |
 |---|---|
 | `rg-arcbox-itpro` | ArcBox VMs + Arc-enrolled servers + Log Analytics |
-| `rg-opsauto-sc` | Solution stack (Cosmos DB, Functions, Portal API, alerts) |
+| `rg-opsauto-sc` | Solution stack (SRE Agent, alerts) |
 
 4. Click **Save**
 
@@ -188,7 +188,7 @@ The KQL files in `sre-tools/kusto/` serve as **reference queries** — they docu
 
 > **Note:** `query-compliance-state` queries Azure Resource Graph, not Log Analytics. Use `az graph query -q "<KQL>"` instead of `az monitor log-analytics query`.
 
-### 6c: Create Python Tools (GLPI + Cosmos DB Only)
+### 6c: Create Python Tools (GLPI Only)
 
 Go to **Builder → Subagent builder → Create → Tool → Python tool**
 
@@ -198,8 +198,6 @@ Each tool must follow the SRE Agent pattern: a `main()` function with typed para
 |---|---|---|---|
 | `glpi-create-ticket` | Create an incident ticket in GLPI | `sre-tools/python/glpi_tools.py` (first `main()`) | `title` (str), `description` (str), `priority` (str) |
 | `glpi-query-cmdb` | Query GLPI CMDB for server CI record | `sre-tools/python/glpi_tools.py` (second `main()`) | `server_name` (str) |
-| `cosmos-query-runs` | Query automation run history | `sre-tools/python/cosmos_tools.py` (first `main()`) | `date` (str), `task_type` (str) |
-| `cosmos-check-memories` | Check active suppression rules | `sre-tools/python/cosmos_tools.py` (second `main()`) | `server_name` (str), `task_type` (str) |
 
 For each tool:
 1. Click **Create → Tool → Python tool**
@@ -221,8 +219,8 @@ Go to **Builder → Subagent builder**
 | Name | `vm-diagnostics` |
 | Description | `Specialized in diagnosing Windows/Linux VM issues: performance, disk, services, event logs. Uses Arc Run Commands for remote investigation.` |
 | Enable skills | ✅ Yes |
-| Tools | `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `glpi-create-ticket`, `cosmos-check-memories` |
-| Instructions | "You are a VM diagnostics specialist. When investigating a server issue: 1) Check current health via Arc Run Commands, 2) Analyze performance trends via KQL, 3) Check if any memory/suppression rules apply, 4) Determine root cause, 5) Create GLPI ticket if human action needed." |
+| Tools | `RunAzCliReadCommands`, `RunAzCliWriteCommands`, `glpi-create-ticket` |
+| Instructions | "You are a VM diagnostics specialist. When investigating a server issue: 1) Check current health via Arc Run Commands, 2) Analyze performance trends via KQL, 3) Determine root cause, 4) Create GLPI ticket if human action needed." |
 
 ### 7b: Security Troubleshooting Subagent
 

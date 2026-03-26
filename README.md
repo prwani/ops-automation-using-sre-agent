@@ -1,6 +1,6 @@
 # Ops Automation Using Azure SRE Agent
 
-Automate Wintel (Windows / VMware / Security) operations using **Azure Arc**, **Microsoft Defender for Cloud**, **Azure SRE Agent**, and **Azure AI Foundry Agents** — eliminating manual toil for health checks, compliance, alerting, patching, and CMDB management.
+Automate Wintel (Windows / VMware / Security) operations using **Azure Arc**, **Microsoft Defender for Cloud**, and **Azure SRE Agent** — eliminating manual toil for health checks, compliance, alerting, patching, and CMDB management.
 
 ## Problem
 
@@ -21,20 +21,18 @@ All tasks are largely manual, ad-hoc, and undocumented. This project automates t
 
 ## Solution Overview
 
-A **3-tier architecture** that uses deterministic automation first, and AI only where human judgment is needed:
+A **2-tier architecture** that uses deterministic automation first, and AI only where human judgment is needed:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Tier 3: Azure SRE Agent                                     │
-│  Incident response, alert triage, security diagnostics       │
+│  Tier 2: Azure SRE Agent (AI)                                │
+│  Incident response, alert triage, security diagnostics,      │
+│  compliance analysis, patch risk, trend detection             │
 │  Skills (AgentSkills.io) + Custom tools + Runbooks           │
 ├──────────────────────────────────────────────────────────────┤
-│  Tier 2: Azure AI Foundry Agents + Workflows                 │
-│  Compliance analysis, patch risk, daily briefs, portal chat  │
-├──────────────────────────────────────────────────────────────┤
-│  Tier 1: Azure Functions (Deterministic Automation)           │
+│  Tier 1: PowerShell Scripts (Deterministic Automation)        │
 │  Health checks, data collection, CMDB sync, patching         │
-│  Adapter Layer → Arc, Defender, ITSM, CMDB, Update Manager   │
+│  Adapter Layer → Arc, Defender, GLPI ITSM/CMDB, Update Mgr  │
 └──────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -49,10 +47,8 @@ A **3-tier architecture** that uses deterministic automation first, and AI only 
 | [Arc-enabled VMware vSphere](https://learn.microsoft.com/azure/azure-arc/vmware-vsphere/overview) | Project vCenter VMs into Azure — same `arc_adapter` handles everything |
 | [Microsoft Defender for Cloud](https://learn.microsoft.com/azure/defender-for-cloud/) | Security posture, CIS compliance, vulnerability assessment, agent health |
 | [Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/) | AI-powered incident response, investigation, remediation with built-in memory |
-| [Azure AI Foundry Agent Service](https://learn.microsoft.com/azure/ai-services/agents/) | Compliance analysis, patch risk assessment, portal chat with memory |
-| [Azure Functions](https://learn.microsoft.com/azure/azure-functions/) | Timer-triggered automation — health checks, compliance pulls, CMDB sync |
 | [Azure Update Manager](https://learn.microsoft.com/azure/update-manager/) | Patch assessment, scheduling, and deployment across hybrid estate |
-| [Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/) | Run history, user feedback, and memory storage for the Operations Portal |
+| [GLPI](https://glpi-project.org/) | Open-source ITSM ticketing + CMDB (swappable for ManageEngine in production) |
 
 ## Architecture
 
@@ -64,51 +60,51 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture docum
 
 | # | Requirement | Automation Covers | AI Component |
 |---|---|---|---|
-| 1 | Daily Health Checks | ~90% | Optional — Health Insights Agent |
-| 2 | Compliance Reports | ~95% | Optional — Compliance Analyst Agent |
+| 1 | Daily Health Checks | ~90% | Optional — SRE Agent trend analysis |
+| 2 | Compliance Reports | ~95% | Optional — SRE Agent executive summaries |
 | 3 | Alert Monitoring | ~70% | **SRE Agent** (built-in incident response) |
 | 4 | Security Troubleshooting | ~60% | **SRE Agent** (custom subagent + skills) |
 | 5 | Accops Support | ~50% | Evaluate in Phase 3 |
 | 6 | VMware BAU | ~90% | Not needed |
-| 7 | Monthly Patching | ~85% | Optional — Patch Risk Agent |
+| 7 | Monthly Patching | ~85% | Optional — SRE Agent risk assessment |
 | 8 | Quarterly Hardening | ~80% | Optional — audit narrative |
 | 9 | CMDB Updates | ~85% | Not needed |
 
 **7 of 9 requirements are fully served by deterministic automation.** SRE Agent handles the 2 judgment-heavy tasks natively.
 
-## Operations Portal
-
-A unified web app (React + TypeScript + Fluent UI) where engineers:
-- **View today's runs** — real-time status of all automated tasks
-- **Browse history** — filterable execution history with success/failure details
-- **Chat with AI** — ask questions about runs, servers, or alerts using natural language
-- **Give feedback** — instructions that become persistent memories (e.g., "ignore disk warnings on SRV-A for 10 days")
-
-See [docs/portal.md](docs/portal.md) for portal design details.
-
 ## Demo Environment
 
-Uses [Azure Jumpstart ArcBox for IT Pros](https://jumpstart.azure.com/azure_jumpstart_arcbox/ITPro) — a self-contained sandbox with Arc-enrolled VMs. **13 out of 14 components run real** (no mocks). Only GLPI (open-source ITSM+CMDB) is demo-specific.
+Uses [Azure Jumpstart ArcBox for IT Pros](https://jumpstart.azure.com/azure_jumpstart_arcbox/ITPro) — a self-contained sandbox with Arc-enrolled VMs. All core components run real (no mocks). Only GLPI (open-source ITSM+CMDB) is demo-specific.
 
 See [docs/demo-environment.md](docs/demo-environment.md) for setup instructions.
+
+## Demo Scripts
+
+Seven PowerShell scripts in `scripts/` demonstrate each automation scenario end-to-end:
+
+| Script | Scenario | Description |
+|---|---|---|
+| `scripts/demo-a-health-check.ps1` | Daily Health Check | Collect disk, CPU, memory, services, event logs across Arc VMs |
+| `scripts/demo-b-alert-triage.ps1` | Alert Triage | Spike CPU + stop service → trigger alerts → create GLPI ticket |
+| `scripts/demo-c-security-agent.ps1` | Security Agent | Break/restart Defender agent, auto-diagnose via Arc Run Commands |
+| `scripts/demo-d-compliance.ps1` | Compliance Reporting | Pull Defender + Policy compliance data, generate HTML report |
+| `scripts/demo-e-patching.ps1` | Monthly Patching | Assess, deploy, validate patches via Azure Update Manager |
+| `scripts/demo-f-cmdb-sync.ps1` | CMDB Sync | Compare Azure Resource Graph vs GLPI CMDB, auto-reconcile |
+| `scripts/demo-g-snapshot-cleanup.ps1` | Snapshot Cleanup | Find and delete stale Hyper-V checkpoints older than 7 days |
 
 ## Project Structure
 
 ```
-├── docs/                    # Architecture, portal design, demo setup
+├── docs/                    # Architecture, demo setup, SRE Agent guides
+├── scripts/                 # PowerShell demo scripts (7 scenarios)
 ├── src/adapters/            # Tool-agnostic integration layer (Arc, Defender, ITSM, CMDB, Patch)
 ├── src/health_checks/       # Health check engine
 ├── src/compliance/          # Compliance report engine (Defender for Cloud)
 ├── src/alerting/            # Alert ingestion + routing to SRE Agent
 ├── src/patching/            # Patch orchestration (Azure Update Manager)
 ├── src/cmdb/                # CMDB reconciliation engine
-├── agents/                  # Foundry Agent definitions (Compliance, Patch Risk, Ops Chat)
 ├── sre-skills/              # SRE Agent Skills (AgentSkills.io format)
 ├── sre-tools/               # SRE Agent custom Kusto + Python tools
-├── workflows/               # Foundry Workflow definitions (YAML)
-├── functions/               # Azure Functions entry points (timer-triggered)
-├── portal/                  # React + TypeScript frontend
-├── portal-api/              # FastAPI backend (Entra auth, Cosmos DB, Foundry chat)
 ├── infra/                   # Bicep IaC for Azure resources
 └── tests/                   # Test suite
 ```
@@ -118,7 +114,7 @@ See [docs/demo-environment.md](docs/demo-environment.md) for setup instructions.
 | Phase | Duration | Focus |
 |---|---|---|
 | **Assess** | Weeks 1–2 | Document SOPs, audit APIs, measure baselines, Arc onboarding |
-| **Build** | Weeks 3–6 | Adapters, automation engines, SRE Agent skills, Functions, Portal |
+| **Build** | Weeks 3–6 | Adapters, automation engines, SRE Agent skills, demo scripts |
 | **Pilot** | Weeks 7–10 | Deploy to 10–20% of estate, measure KPIs, tune |
 | **Scale** | Month 3 / Q2 | Full rollout, operations handover, ongoing KPI reporting |
 
@@ -137,10 +133,9 @@ See [docs/demo-environment.md](docs/demo-environment.md) for setup instructions.
 
 | Document | Description |
 |---|---|
-| [Architecture](docs/architecture.md) | Three-tier design, data flow, adapter layer |
+| [Architecture](docs/architecture.md) | Two-tier design, data flow, adapter layer |
 | [Demo Environment](docs/demo-environment.md) | ArcBox setup, demo stack, cost estimates |
 | [Demo Scenarios](docs/demos/README.md) | Step-by-step demo walkthroughs |
-| [Operations Portal](docs/portal.md) | Portal pages, API endpoints, Cosmos DB data model |
 | [SRE Agent Skills](docs/sre-skills.md) | Skill inventory, custom tools, SOP → skill mapping |
 | [SRE Agent Setup](docs/sre-agent-setup.md) | Step-by-step SRE Agent deployment and configuration |
 | [GLPI Setup](docs/glpi-setup.md) | GLPI ITSM/CMDB installation and configuration |

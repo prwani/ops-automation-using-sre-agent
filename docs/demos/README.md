@@ -6,12 +6,11 @@ These seven demos showcase a pragmatic approach to Wintel operations automation:
 **deterministic automation is always the first choice — AI is introduced only where
 automation hits a genuine ceiling** (correlation, diagnosis, prioritization).
 
-Every scenario follows the same 3-tier architecture:
+Every scenario follows the same 2-tier architecture:
 
 ```
-Tier 3  │  Azure SRE Agent          – incident response, only where human judgment is needed
-Tier 2  │  Azure AI Foundry Agents  – analysis layer (compliance, patching, reporting)
-Tier 1  │  Azure Functions           – timer-triggered deterministic automation
+Tier 2  │  Azure SRE Agent          – incident response + analysis, where human judgment is needed
+Tier 1  │  PowerShell Scripts         – deterministic automation (scripts/demo-*.ps1)
         └──────────────────────────────────────────────────────────────────────
            Adapter Layer (Arc · Defender · GLPI ITSM/CMDB · Update Manager)
 ```

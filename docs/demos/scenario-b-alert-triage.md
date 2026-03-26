@@ -11,7 +11,7 @@
 | **ITSM** | GLPI — `http://glpi-opsauto-demo.swedencentral.azurecontainer.io` |
 | **Target VM** | ArcBox-Win2K22 (Windows Server 2022, application server role) |
 
-This demo walks through the full alert-to-ticket lifecycle in two phases: first with deterministic automation (Azure Functions + alert rules), then with SRE Agent adding AI-driven correlation, context, and root-cause analysis.
+This demo walks through the full alert-to-ticket lifecycle in two phases: first with deterministic automation (PowerShell scripts + alert rules), then with SRE Agent adding AI-driven correlation, context, and root-cause analysis.
 
 ## What the team does today
 
@@ -28,7 +28,7 @@ This demo walks through the full alert-to-ticket lifecycle in two phases: first 
 
 | Capability | How |
 |---|---|
-| **Alert ingestion** | Azure Function polls Azure Monitor every 5 minutes, deduplicates against Cosmos DB |
+| **Alert ingestion** | PowerShell script (`scripts/demo-b-alert-triage.ps1`) polls Azure Monitor, deduplicates alerts |
 | **Rule-based severity mapping** | `alert-heartbeat-loss` (Sev 1) → P1, `alert-high-cpu` (Sev 2) → P2, `alert-low-disk` (Sev 2) → P2 |
 | **Auto-create GLPI ticket** | POST to GLPI REST API with templated title and description |
 | **Time-based escalation** | P1 not acknowledged within 15 min → page on-call via webhook |
@@ -157,10 +157,10 @@ Explain the time-based escalation logic:
 | P2 (High) | 30 min to acknowledge | Send Teams notification to ops channel |
 | P3 (Medium) | 4 hours to acknowledge | Email ops team |
 
-For the demo, show the escalation configuration in the Azure Function or describe the flow:
+For the demo, show the escalation configuration in the script or describe the flow:
 
 ```
-Alert fires → Function creates ticket → Timer starts
+Alert fires → Script creates ticket → Timer starts
   → 15 min (P1) / 30 min (P2): no acknowledgement?
     → Escalation webhook fires → on-call paged
 ```
@@ -186,7 +186,7 @@ This is the key transition slide to Phase 2. Call out these gaps explicitly:
 | Capability | How |
 |---|---|
 | **Alert correlation** | SRE Agent receives both alerts, recognizes they hit the same VM at the same time, and merges them into one incident |
-| **Context enrichment** | Queries GLPI CMDB for server role, checks Cosmos DB memories for recent changes or suppression rules |
+| **Context enrichment** | Queries GLPI CMDB for server role |
 | **Root-cause analysis** | Correlates CPU spike + stopped service → "W32Time service stopped, possibly causing dependent service failures and elevated CPU" |
 | **Rich ticket descriptions** | Writes a contextual description with probable root cause, affected services, and suggested remediation |
 | **Intelligent severity** | Adjusts priority based on server role (app server = higher impact) and correlation (two symptoms = more likely real) |
@@ -195,7 +195,7 @@ This is the key transition slide to Phase 2. Call out these gaps explicitly:
 
 #### Step 1: SRE Agent receives the alert automatically
 
-The alert ingestion function detects a critical/high-severity alert and forwards it to SRE Agent via webhook:
+The alert ingestion script detects a critical/high-severity alert and forwards it to SRE Agent via webhook:
 
 ```python
 # From src/alerting/ingestor.py — triggered automatically
@@ -210,7 +210,7 @@ payload = {
 # POST → SRE Agent webhook endpoint
 ```
 
-No manual intervention required — the pipeline from Azure Monitor → Function → SRE Agent is fully automated.
+No manual intervention required — the pipeline from Azure Monitor → script → SRE Agent is fully automated.
 
 #### Step 2: Show the rich incident card in SRE Agent chat
 
@@ -247,7 +247,6 @@ Explain what the agent did behind the scenes:
 2. **Queried Azure Monitor** for other recent alerts on `ArcBox-Win2K22`
 3. **Found** the W32Time service was stopped (via Arc Run Command)
 4. **Correlated** both symptoms into a single incident — instead of two separate tickets
-5. **Checked Cosmos DB memories** for suppression rules or maintenance windows — found none
 
 #### Step 4: SRE Agent looks up server role and recent changes
 
@@ -258,10 +257,6 @@ Tool: glpi-query-cmdb
   Input: server_name = "ArcBox-Win2K22"
   Output: { role: "Application server", os: "Windows Server 2022",
             location: "Sweden Central", last_update: "2025-07-01" }
-
-Tool: cosmos-check-memories
-  Input: scope.serverFilter = "ArcBox-Win2K22"
-  Output: No active suppression or maintenance memories
 ```
 
 #### Step 5: SRE Agent creates GLPI ticket with contextual description + probable root cause
@@ -380,5 +375,4 @@ By the end of this demo, the audience should see:
 | AI-enriched GLPI ticket (correlated, Phase 2) | GLPI → Assistance → Tickets |
 | SRE Agent incident card (chat) | SRE Agent chat interface |
 | GLPI CMDB lookup result | SRE Agent tool output |
-| Cosmos DB memory check | SRE Agent tool output |
 | Cleanup confirmation (CPU normal, W32Time running) | CLI output |
