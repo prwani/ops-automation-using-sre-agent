@@ -1,0 +1,7 @@
+# Foundry Agent Service — Health Check Agent dependencies
+# Install: pip install -r requirements.txt
+
+azure-ai-projects>=1.0.0b7
+azure-identity>=1.17.0
+python-dotenv>=1.0.0
+requests>=2.31.0
