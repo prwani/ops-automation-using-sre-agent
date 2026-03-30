@@ -8,21 +8,24 @@ Our solution uses a 2-tier architecture:
 
 **Azure SRE Agent** is the recommended Tier 2 option. However, if SRE Agent is unavailable (regional availability, licensing, organizational constraints), three alternatives can deliver the same AI capabilities. All options require **Azure Arc** as the hybrid bridge to on-prem servers.
 
+All options support our skills because **AgentSkills.io is an open standard** supported by SRE Agent, Microsoft Agent Framework, AND GitHub Copilot CLI natively.
+
 ## Comparison Matrix
 
-| Capability | SRE Agent (Recommended) | Microsoft Agent Framework | Foundry Agent Service | GitHub Copilot Extensions |
+| Capability | SRE Agent (Recommended) | Microsoft Agent Framework | Foundry Agent Service | GitHub Copilot CLI |
 |---|---|---|---|---|
-| **Deployment** | SaaS (sre.azure.com) | Self-hosted (code) | SaaS (ai.azure.com) | SaaS (github.com) |
-| **Development effort** | Low (no-code builder) | High (Python/C# code) | Medium (SDK + portal) | Medium (API + extensions) |
-| **AgentSkills.io support** | ✅ Native | ✅ Native (`SkillsProvider`) | ⚠️ Via Agent Framework SDK | ❌ Custom integration |
-| **MCP tool support** | ✅ Native | ✅ Native | ✅ Native (hosted MCP) | ⚠️ Limited |
-| **Azure Arc integration** | ✅ Built-in (managed identity) | ⚠️ Custom (az CLI / SDK) | ⚠️ Custom (function calling) | ⚠️ Custom (API calls) |
-| **Incident auto-response** | ✅ Built-in (Azure Monitor, ServiceNow, PagerDuty) | ❌ Build custom | ❌ Build custom | ❌ Not applicable |
-| **Memory / learning** | ✅ Built-in | ⚠️ Custom (session state) | ⚠️ Custom (thread history) | ❌ No persistence |
-| **Scheduled tasks** | ✅ Built-in | ❌ Need external scheduler | ❌ Need external trigger | ❌ Not applicable |
-| **Regional availability** | Limited (check sre.azure.com) | Any Azure region (self-hosted) | Most Azure regions | Global |
-| **Cost model** | Azure Agent Units (AAUs) | Compute + LLM API costs | Per-agent + LLM costs | Copilot license |
-| **Best for** | Ops teams wanting turnkey SRE automation | Teams needing full customization | Teams already on Foundry platform | Developer-centric teams |
+| **Deployment** | SaaS (sre.azure.com) | Self-hosted (code) | SaaS (ai.azure.com) | Local CLI + cloud models |
+| **Development effort** | Low (no-code builder) | High (Python/C# code) | Medium (SDK + portal) | Low (drop SKILL.md files) |
+| **AgentSkills.io support** | ✅ Native | ✅ Native (`SkillsProvider`) | ⚠️ Via Agent Framework SDK | ✅ Native (`.github/skills/` or `~/.copilot/skills/`) |
+| **MCP tool support** | ✅ Native | ✅ Native | ✅ Native (hosted MCP) | ✅ Native (MCP servers) |
+| **Azure Arc integration** | ✅ Built-in (managed identity) | ⚠️ Custom (az CLI / SDK) | ⚠️ Custom (function calling) | ✅ Via CLI tools (az CLI available in terminal) |
+| **Incident auto-response** | ✅ Built-in (Azure Monitor, ServiceNow, PagerDuty) | ❌ Build custom | ❌ Build custom | ❌ Interactive only (no auto-trigger) |
+| **Memory / learning** | ✅ Built-in | ⚠️ Custom (session state) | ⚠️ Custom (thread history) | ⚠️ Session-based (plan.md, custom instructions) |
+| **Scheduled tasks** | ✅ Built-in | ❌ Need external scheduler | ❌ Need external trigger | ❌ Interactive only |
+| **Script execution** | ✅ Built-in (runbooks) | ✅ Custom tools | ⚠️ Code interpreter | ✅ Native (runs PowerShell, Python, bash directly) |
+| **Regional availability** | Limited (check sre.azure.com) | Any Azure region (self-hosted) | Most Azure regions | Global (runs locally) |
+| **Cost model** | Azure Agent Units (AAUs) | Compute + LLM API costs | Per-agent + LLM costs | Copilot license ($19-39/user/month) |
+| **Best for** | Ops teams wanting turnkey SRE automation | Teams needing full customization | Teams already on Foundry platform | Engineers who work in the terminal |
 
 ## Skills & Tools Reusability
 
@@ -129,25 +132,72 @@ Alternatively, convert SKILL.md content into Foundry agent instructions (system 
 - Trigger mechanism (webhook or scheduled)
 - Convert SKILL.md → agent instructions
 
-#### Option C: GitHub Copilot Extensions
+#### Option C: GitHub Copilot CLI
 
-**Skills:** ❌ **Not directly reusable** — Copilot Extensions use a different model (API endpoints, not AgentSkills.io). However, the SKILL.md **content** (procedures, steps) can be converted into Copilot Extension responses.
+**Skills:** ✅ **100% reusable** — Copilot CLI natively supports AgentSkills.io. Just copy our skills to the project or user skills directory:
 
-**Tools:** ⚠️ **Partially reusable** — Build a Copilot Extension API that calls our Python tools internally:
+```bash
+# Project skills (specific to this repo)
+cp -r sre-skills/* .github/skills/
+
+# Or personal skills (available across all projects)
+cp -r sre-skills/* ~/.copilot/skills/
+```
+
+That's it. Copilot CLI auto-discovers SKILL.md files and loads them when context matches. Verify:
 
 ```
-GitHub Copilot → Copilot Extension API → glpi_tools.py / az CLI
+/skills list
 ```
 
-**Azure Arc access:** The extension API server would need Azure credentials to call Arc APIs.
+You should see all 5 skills: `wintel-health-check-investigation`, `security-agent-troubleshooting`, etc.
+
+**Tools:** ✅ **Natively available** — Copilot CLI runs in the terminal with full access to:
+- `az CLI` (Azure Arc, Defender, Resource Graph, Update Manager — all available)
+- PowerShell / bash scripts (our `scripts/demo-*.ps1` work directly)
+- Python scripts (our `sre-tools/python/glpi_tools.py` can be invoked)
+- MCP servers (connect GLPI or custom tools via MCP)
+
+No tool conversion needed — Copilot CLI executes commands directly in the shell.
+
+**Azure Arc access:** ✅ **Direct** — Copilot CLI runs in your terminal where `az CLI` is authenticated:
+
+```
+Ask Copilot: "Check the health of ArcBox-Win2K22"
+→ Copilot loads wintel-health-check-investigation skill
+→ Runs: az monitor log-analytics query --workspace f98fca75... --analytics-query "Perf | where Computer == 'ArcBox-Win2K22'..."
+→ Interprets results using skill instructions
+```
+
+**Example interaction:**
+
+```
+> Use the /compliance-investigation skill to check compliance on my Arc servers
+
+Copilot: I'll check compliance using Defender for Cloud and Azure Policy.
+
+[Running] az security regulatory-compliance-standards list -o json
+[Running] az policy state summarize --resource-group rg-arcbox-itpro
+
+Based on the results:
+- CIS compliance: 78% (22% failing)
+- Azure Policy: 3 non-compliant resources
+- Top failing control: "Ensure Windows Firewall is enabled" (4 servers)
+- Recommendation: Priority fix for firewall settings on ArcBox-Win2K22 and ArcBox-Win2K25
+
+Shall I create a GLPI ticket for remediation?
+```
 
 **What you need to build:**
-- Copilot Extension API server (significant effort)
-- OAuth flow for GitHub → Azure authentication
-- Convert all skills to API response logic
-- No incident auto-response (Copilot is pull-based, not push-based)
+- Nothing — just copy skills to `.github/skills/` or `~/.copilot/skills/`
+- Ensure `az CLI` is authenticated in the terminal
+- Optionally: connect MCP servers for GLPI integration
 
-**Best for:** Teams that primarily work in GitHub and want AI assistance during code review, PR investigation, or ad-hoc queries — NOT for automated incident response.
+**Limitations:**
+- **Interactive only** — no automated incident response (user must ask)
+- **No scheduled tasks** — runs on-demand, not proactively
+- **Session memory only** — knowledge doesn't persist across sessions (use custom instructions for persistent context)
+- **Best as complement, not replacement** — great for ad-hoc investigation alongside SRE Agent or scripts
 
 ## Recommendation Decision Tree
 
@@ -161,18 +211,19 @@ Is Azure SRE Agent available in your region?
           │         Self-host in any region, full skills reuse, most flexible
           │         Effort: ~2-3 weeks to build hosting + triggers + memory
           │
-          └── NO → Are you already on Azure AI Foundry?
-                    ├── YES → Use Foundry Agent Service (Option B)
-                    │         Good skills reuse, managed hosting
-                    │         Effort: ~1-2 weeks to convert skills + build tools
+          └── NO → Do engineers work primarily in the terminal?
+                    ├── YES → Use GitHub Copilot CLI (Option C)
+                    │         Zero build effort — copy skills, use az CLI directly
+                    │         Interactive only, no auto-response
+                    │         Effort: ~1 day (copy skills + verify)
                     │
-                    └── NO → Is the team developer-centric (GitHub-first)?
-                              ├── YES → Use GitHub Copilot Extensions (Option C)
-                              │         Pull-based only, significant build effort
-                              │         Effort: ~3-4 weeks
+                    └── NO → Are you already on Azure AI Foundry?
+                              ├── YES → Use Foundry Agent Service (Option B)
+                              │         Good skills reuse, managed hosting
+                              │         Effort: ~1-2 weeks to convert skills + build tools
                               │
-                              └── NO → Use Agent Framework (Option A)
-                                        Best balance of flexibility and portability
+                              └── NO → Use Copilot CLI (Option C) + scripts
+                                        Lowest barrier, add Agent Framework later if needed
 ```
 
 ## Migration Effort Summary
@@ -181,7 +232,7 @@ Is Azure SRE Agent available in your region?
 |---|---|---|---|---|---|
 | **Agent Framework** | Copy as-is | Wrap as FunctionTool | Build SDK wrapper | Build webhook handler | ~2-3 weeks |
 | **Foundry Agent Service** | Convert to instructions | Convert to function defs | Build function tools | Build trigger | ~1-2 weeks |
-| **GitHub Copilot Extension** | Rewrite as API | Build API server | Build auth flow | Not supported | ~3-4 weeks |
+| **GitHub Copilot CLI** | Copy to `.github/skills/` | Already available (az CLI) | Already available (terminal) | Not supported (interactive) | **~1 day** |
 
 ## Key Principle: Skills Are the Portable Asset
 
@@ -191,6 +242,13 @@ The **AgentSkills.io format** is the interoperability layer. Our 5 SKILL.md file
 - Tool references and execution patterns
 - Escalation criteria and remediation guidance
 
-This knowledge is **platform-independent**. Whether the runtime is SRE Agent, Agent Framework, Foundry, or a future platform — the skills carry the operational intelligence.
+This knowledge is **platform-independent**. All three alternatives plus SRE Agent support AgentSkills.io natively or with minimal adaptation:
+
+| Platform | Skills Support | How |
+|---|---|---|
+| **Azure SRE Agent** | ✅ Native | Upload via Builder UI |
+| **Agent Framework** | ✅ Native | `SkillsProvider(skill_paths=["./sre-skills"])` |
+| **GitHub Copilot CLI** | ✅ Native | Copy to `.github/skills/` or `~/.copilot/skills/` |
+| **Foundry Agent Service** | ⚠️ Convert | Paste SKILL.md content into agent instructions |
 
 **Invest in skills quality, not platform lock-in.**
