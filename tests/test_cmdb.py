@@ -38,7 +38,6 @@ def reconciler() -> CmdbReconciler:
     arc = AsyncMock()
     cmdb = AsyncMock()
     itsm = AsyncMock()
-    cosmos = MagicMock()
 
     mock_ticket = MagicMock()
     mock_ticket.ticket_id = "TICKET-001"
@@ -48,7 +47,6 @@ def reconciler() -> CmdbReconciler:
         arc_adapter=arc,
         cmdb_adapter=cmdb,
         itsm_adapter=itsm,
-        cosmos_client=cosmos,
     )
 
 

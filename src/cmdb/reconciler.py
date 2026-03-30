@@ -36,12 +36,10 @@ class CmdbReconciler:
         arc_adapter: ArcAdapterBase,
         cmdb_adapter: CmdbAdapterBase,
         itsm_adapter: ItsmsAdapterBase,
-        cosmos_client: Any,
     ) -> None:
         self._arc = arc_adapter
         self._cmdb = cmdb_adapter
         self._itsm = itsm_adapter
-        self._cosmos = cosmos_client
 
     async def run_reconciliation(self) -> dict[str, Any]:
         """Compare Arc inventory vs CMDB and return discrepancies."""

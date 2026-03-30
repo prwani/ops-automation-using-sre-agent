@@ -4,7 +4,7 @@
 
 | Source | Description | Integration |
 |---|---|---|
-| **Azure Monitor Metrics** | CPU, memory, disk, and network threshold alerts on Arc-enrolled servers | Azure Monitor action group → Alert Ingestor function (every 5 min) |
+| **Azure Monitor Metrics** | CPU, memory, disk, and network threshold alerts on Arc-enrolled servers | Azure Monitor action group → alert monitoring scripts (every 5 min) |
 | **Microsoft Defender for Cloud** | Security alerts (malware, brute-force, anomalous login, vulnerability findings) | Defender API polling via `src.alerting.ingestor` |
 | **Heartbeat Loss** | Azure Arc connected-machine agent stops reporting (heartbeat gap > 10 min) | Log Analytics heartbeat query evaluated every 5 minutes |
 
@@ -87,10 +87,9 @@ To prevent ticket flooding:
 
 The **SRE Agent** provides AI-augmented triage for incoming alerts:
 
-- The Alert Ingestor function (`functions/alert_ingestor`) polls for new alerts every 5 minutes and forwards high-priority alerts to the SRE Agent webhook.
+- The alert monitoring scripts poll for new alerts every 5 minutes and forward high-priority alerts to the SRE Agent webhook.
 - The SRE Agent automatically invokes the relevant **skill** (e.g., `wintel-health-check-investigation`, `security-agent-troubleshooting`) based on alert type.
 - The agent runs diagnostics using `RunAzCliReadCommands`, checks for suppression memories, and determines whether a ticket is needed.
 - For auto-remediable issues (e.g., restart a stopped service), the agent uses `RunAzCliWriteCommands` and logs the action.
-- All agent decisions and diagnostic output are stored in Cosmos DB for audit and continuous improvement.
 
 Refer to the [SRE Agent Setup Guide](../sre-agent-setup.md) and individual [SRE Skills](../sre-skills.md) for details on automated investigation workflows.

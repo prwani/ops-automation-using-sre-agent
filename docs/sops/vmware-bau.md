@@ -22,7 +22,7 @@
 3. **Auto-delete** snapshots older than **30 days** after confirmation:
    - Confirmation required via ITSM change record for production VMs.
    - Dev/Test snapshots auto-deleted without confirmation.
-4. Log deletions to Cosmos DB `vmware-bau-runs` container.
+4. Log deletions to console output.
 
 | Age | Action |
 |---|---|
@@ -62,7 +62,7 @@ For each Arc-enrolled VM:
 | Defender agent status | Defender for Endpoint device API |
 | Pending patches | Azure Update Manager — pending patch count |
 
-Results stored in Cosmos DB; VMs failing multiple checks flagged for review.
+VMs failing multiple checks flagged for review.
 
 ### Task 4 — Orphaned Resource Cleanup (Monthly)
 
@@ -79,6 +79,6 @@ Identify via Azure Resource Graph:
 
 ## Output
 
-- **Cosmos DB** — `vmware-bau-runs` container; one document per task run.
-- **Weekly email summary** — sent via portal notification to the Wintel SRE distribution list.
+- **Console** — task results logged to console output.
+- **Weekly email summary** — sent to the Wintel SRE distribution list.
 - **ITSM ticket** — created for any orphaned resources or snapshots requiring manual action.

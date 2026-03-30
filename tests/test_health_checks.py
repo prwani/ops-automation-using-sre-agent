@@ -82,12 +82,9 @@ def _make_engine(
     la_client = MagicMock()
     la_client.query_workspace.return_value = la_response
 
-    cosmos = MagicMock()
-
     return HealthCheckEngine(
         arc_adapter=arc,
         log_analytics_client=la_client,
-        cosmos_client=cosmos,
         workspace_id="test-workspace-id",
         suppressions=suppressions or {},
     )
@@ -156,7 +153,6 @@ async def test_server_unreachable_returns_unknown():
     engine = HealthCheckEngine(
         arc_adapter=arc,
         log_analytics_client=MagicMock(),
-        cosmos_client=MagicMock(),
         workspace_id="test-workspace-id",
     )
     result = await engine.run_server(server.server_id)

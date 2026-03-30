@@ -110,5 +110,5 @@ The report should include:
 1. **Defender for Cloud**: Regulatory compliance % per standard (CIS, NIST, etc.)
 2. **Azure Policy**: Non-compliant resource count per policy assignment
 3. **Combined**: Total unique findings, deduplicated across both sources
-4. **Trend**: Compare with previous report (if available from Cosmos DB)
+4. **Trend**: Compare with previous report if available
 5. **Top 10 actions**: Prioritized remediation items

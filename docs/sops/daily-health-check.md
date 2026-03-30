@@ -6,7 +6,7 @@
 |---|---|
 | **Frequency** | 4× per day: 06:00, 12:00, 18:00, 00:00 UTC |
 | **Scope** | All Azure Arc-enrolled Windows servers |
-| **Automation tier** | Tier 1 (Azure Functions) + Tier 2 (AI insight) |
+| **Automation tier** | Tier 1 (PowerShell scripts) + Tier 2 (AI insight) |
 | **Owner** | Wintel SRE team |
 
 ---
@@ -84,8 +84,8 @@ Before evaluating any threshold, the engine checks:
 
 ## Output
 
-- **Cosmos DB** — `health-runs` container; one document per run with all check results.
-- **Portal summary card** — aggregated status displayed in the ops portal.
+- **GLPI** — results logged to GLPI tickets and console output.
+- **Console** — aggregated status displayed in script output.
 
 ---
 

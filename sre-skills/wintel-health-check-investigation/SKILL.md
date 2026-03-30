@@ -9,8 +9,6 @@ triggers:
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
-  - cosmos-query-runs
-  - cosmos-check-memories
   - glpi-create-ticket
 sop_source: docs/sops/daily-health-check.md
 ---
@@ -25,21 +23,13 @@ This skill is invoked when an automated health check reports a WARNING or CRITIC
 
 ### Step 1 — Identify the affected server and check type
 
-Query the most recent health check run from Cosmos DB:
+Query the health check script output or ask the user for context.
 
-```
-cosmos-query-runs(taskType="health_check", status="WARNING|CRITICAL", limit=1)
-```
-
-Note the `server_id`, `checks` array, and any `memoryApplied` entries.
+Note the `server_id`, failing checks, and any relevant details from the output.
 
 ### Step 2 — Check for active suppression rules
 
-Before investigating, verify if there is an active suppression memory for this server/check:
-
-```
-cosmos-check-memories(server_id=<server_id>, check_type=<failing_check>)
-```
+Check if the user has mentioned any known suppression rules for this server or check type.
 
 If a suppression exists and hasn't expired, document it and do NOT create a ticket. Note the suppression in your response.
 

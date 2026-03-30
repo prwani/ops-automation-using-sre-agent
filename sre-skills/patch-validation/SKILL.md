@@ -9,7 +9,6 @@ triggers:
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
-  - cosmos-query-runs
   - glpi-create-ticket
 sop_source: docs/sops/windows-patching.md
 ---

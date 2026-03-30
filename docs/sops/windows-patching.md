@@ -6,7 +6,7 @@
 |---|---|
 | **Frequency** | Monthly — 2nd Tuesday (Patch Tuesday) + 72 hours staging |
 | **Scope** | All Arc-enrolled Windows servers |
-| **Automation tier** | Tier 1 (Update Manager) + Tier 2 (Patch Risk Agent) |
+| **Automation tier** | Tier 1 (Update Manager) + Tier 2 (SRE Agent) |
 | **Owner** | Wintel SRE team |
 
 ---
@@ -18,11 +18,11 @@
 **Trigger:** Scheduled on the 2nd Tuesday of each month.
 
 1. Query Azure Update Manager for all missing patches across enrolled servers.
-2. Send patch list to **Patch Risk Agent** (Tier 2) for AI risk scoring:
+2. Send patch list to **SRE Agent** (Tier 2) for AI risk scoring:
    - Flags patches with known compatibility issues.
    - Identifies servers with custom applications requiring extra validation.
 3. Generate approval request document and post to the change management channel.
-4. Store assessment results in Cosmos DB `patch-assessments` container.
+4. Log assessment results to console output.
 
 ### Phase 2 — Wave 1: Dev/Test (Patch Tuesday + 24 hours)
 
@@ -32,7 +32,7 @@
 2. Wait for deployment to complete (max 4 hours).
 3. Run automated post-patch health check (see [Post-Patch Checks](#post-patch-checks)).
 4. Update CMDB with new patch level.
-5. Log wave results to Cosmos DB.
+5. Log wave results to console output.
 
 **Failure criteria:** If > 20% of dev/test servers fail health check, pause Wave 2 and raise P2 incident.
 

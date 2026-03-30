@@ -62,14 +62,12 @@ class HealthCheckEngine:
         self,
         arc_adapter: ArcAdapterBase,
         log_analytics_client: Any,
-        cosmos_client: Any,
         workspace_id: str = "",
         thresholds: HealthCheckThresholds | None = None,
         suppressions: dict[str, Any] | None = None,
     ) -> None:
         self._arc = arc_adapter
         self._la_client = log_analytics_client
-        self._cosmos = cosmos_client
         self._workspace_id = workspace_id
         self._thresholds = thresholds or HealthCheckThresholds()
         self._suppressions = suppressions or {}

@@ -1,6 +1,6 @@
 """Compliance engine — collects Defender for Cloud data and generates daily report."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -22,12 +22,8 @@ class ComplianceEngine:
     def __init__(
         self,
         defender_adapter: DefenderAdapterBase,
-        cosmos_client: Any,
-        cosmos_database: str = "ops-automation",
     ) -> None:
         self._defender = defender_adapter
-        self._cosmos = cosmos_client
-        self._cosmos_database = cosmos_database
 
     async def run_daily_report(self, subscription_id: str) -> dict[str, Any]:
         """Collect compliance data and build the full daily report document."""
@@ -120,29 +116,6 @@ class ComplianceEngine:
         return failing[:top_n]
 
     async def calculate_trend(self, subscription_id: str, days: int = 7, current_score: float | None = None) -> dict[str, Any]:
-        """Compare current score against N days ago using Cosmos DB history."""
+        """Return trend stub — historical comparison requires previous report data."""
         log.info("compliance.calculate_trend", days=days)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        try:
-            query = (
-                "SELECT TOP 1 c.secure_score, c.timestamp FROM c "
-                f"WHERE c.subscription_id = '{subscription_id}' "
-                f"AND c.timestamp < '{cutoff.isoformat()}' "
-                "ORDER BY c.timestamp DESC"
-            )
-            container = (
-                self._cosmos
-                .get_database_client(self._cosmos_database)
-                .get_container_client("compliance-runs")
-            )
-            items = list(container.query_items(query=query, enable_cross_partition_query=True))
-        except Exception as exc:
-            log.warning("compliance.calculate_trend.error", error=str(exc))
-            return {"days": days, "baseline_score": None, "delta": None}
-
-        if not items:
-            return {"days": days, "baseline_score": None, "delta": None}
-
-        baseline = items[0].get("secure_score")
-        delta = round(current_score - baseline, 2) if current_score is not None and baseline is not None else None
-        return {"days": days, "baseline_score": baseline, "delta": delta}
+        return {"days": days, "baseline_score": None, "delta": None}

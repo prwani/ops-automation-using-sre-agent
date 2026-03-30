@@ -81,13 +81,11 @@ for r, (k, v) in enumerate([('Reference Query','Source'), ('query-perf-trends','
     ('query-update-compliance','sre-tools/kusto/query-update-compliance.kql')]):
     t.rows[r].cells[0].text = k; t.rows[r].cells[1].text = v
 
-doc.add_heading('Python Tools — GLPI + Cosmos DB Only (Builder > Tools > Python)', level=2)
-doc.add_paragraph('Deps: httpx, azure-cosmos')
-t = doc.add_table(rows=5, cols=2); t.style = 'Light Grid Accent 1'
+doc.add_heading('Python Tools — GLPI Only (Builder > Tools > Python)', level=2)
+doc.add_paragraph('Deps: httpx')
+t = doc.add_table(rows=3, cols=2); t.style = 'Light Grid Accent 1'
 for r, (k, v) in enumerate([('Tool','Source'), ('glpi-create-ticket','sre-tools/python/glpi_tools.py'),
-    ('glpi-query-cmdb','sre-tools/python/glpi_tools.py'),
-    ('cosmos-query-runs','sre-tools/python/cosmos_tools.py'),
-    ('cosmos-check-memories','sre-tools/python/cosmos_tools.py')]):
+    ('glpi-query-cmdb','sre-tools/python/glpi_tools.py')]):
     t.rows[r].cells[0].text = k; t.rows[r].cells[1].text = v
 
 doc.add_heading('Step 7: Build Subagents', level=1)
@@ -95,8 +93,8 @@ doc.add_paragraph('Builder > Subagent builder')
 doc.add_heading('VM Diagnostics', level=2)
 t = doc.add_table(rows=4, cols=2); t.style = 'Light Grid Accent 1'
 for r, (k, v) in enumerate([('Setting','Value'), ('Name','vm-diagnostics'),
-    ('Tools','RunAzCliReadCommands, RunAzCliWriteCommands, glpi-create-ticket, cosmos-check-memories'),
-    ('Instructions','VM specialist: Check health via Arc, analyze KQL trends via RunAzCliReadCommands, check memories, root cause, create ticket if needed')]):
+    ('Tools','RunAzCliReadCommands, RunAzCliWriteCommands, glpi-create-ticket'),
+    ('Instructions','VM specialist: Check health via Arc, analyze KQL trends via RunAzCliReadCommands, root cause, create ticket if needed')]):
     t.rows[r].cells[0].text = k; t.rows[r].cells[1].text = v
 
 doc.add_heading('Security Troubleshooter', level=2)

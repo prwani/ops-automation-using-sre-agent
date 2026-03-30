@@ -30,14 +30,10 @@ class PatchOrchestrator:
         patch_adapter: PatchAdapterBase,
         arc_adapter: ArcAdapterBase,
         itsm_adapter: ItsmsAdapterBase,
-        cosmos_client: Any,
-        cosmos_database: str = "ops-automation",
     ) -> None:
         self._patch = patch_adapter
         self._arc = arc_adapter
         self._itsm = itsm_adapter
-        self._cosmos = cosmos_client
-        self._cosmos_database = cosmos_database
 
     async def run_monthly_assessment(self, server_ids: list[str]) -> dict[str, Any]:
         """Trigger patch assessment for all servers and store results."""
@@ -70,17 +66,7 @@ class PatchOrchestrator:
                     ],
                 }
 
-        try:
-            container = (
-                self._cosmos
-                .get_database_client(self._cosmos_database)
-                .get_container_client("patch-assessments")
-            )
-            container.upsert_item({**assessment, "id": assessment["run_id"]})
-        except Exception as exc:
-            log.warning("patching.assessment.cosmos_error", error=str(exc))
-
-        log.info("patching.run_monthly_assessment.done")
+        log.info("patching.run_monthly_assessment.done", run_id=assessment["run_id"])
         return assessment
 
     async def create_patch_plan(self, server_ids: list[str]) -> dict[str, list[str]]:

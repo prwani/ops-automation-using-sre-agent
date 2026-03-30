@@ -11,7 +11,6 @@ tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
   - glpi-create-ticket
-  - cosmos-query-runs
 sop_source: docs/sops/vmware-bau.md
 ---
 
