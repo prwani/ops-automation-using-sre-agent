@@ -21,7 +21,16 @@ The simplest option — copy skills, authenticate `az CLI`, and start asking que
 │  │  │ SKILL.md      │   │ │ Python         │ │  │  │
 │  │  └──────────────┘   │ │ curl           │ │  │  │
 │  │                      │ └────────────────┘ │  │  │
-│  │                      └────────────────────┘  │  │
+│  │  ┌──────────────┐   └────────────────────┘  │  │
+│  │  │ Azure Skills  │                           │  │
+│  │  │ Plugin        │  (optional add-on)        │  │
+│  │  │ ┌──────────┐ │                            │  │
+│  │  │ │diagnostics│ │                            │  │
+│  │  │ │observ.   │ │                            │  │
+│  │  │ │compliance│ │                            │  │
+│  │  │ │+200 MCP  │ │                            │  │
+│  │  │ └──────────┘ │                            │  │
+│  │  └──────────────┘                            │  │
 │  └─────────────────────────────────────────────┘  │
 │                                                   │
 │  ┌──────────────┐  ┌─────────────┐  ┌──────────┐ │
@@ -62,7 +71,38 @@ cp -r sre-skills/* ~/.copilot/skills/
 Copy-Item -Recurse sre-skills\* $env:USERPROFILE\.copilot\skills\
 ```
 
-## Step 2: Verify Skills Are Loaded
+## Step 2 (Optional): Install the Azure Skills Plugin
+
+The [Azure Skills Plugin](https://github.com/microsoft/azure-skills) adds **20 Azure skills and 200+ MCP tools** for Azure infrastructure diagnostics, observability, and compliance. It complements our custom Wintel skills — it does NOT replace them.
+
+```
+/plugin marketplace add microsoft/azure-skills
+/plugin install azure@azure-skills
+```
+
+What this adds to health checks:
+- **`azure-diagnostics`** — AppLens troubleshooting, Azure Monitor KQL queries for resource health
+- **`azure-observability`** — query Log Analytics for Perf/Event data, create alert rules, view Workbooks
+- **Azure MCP Server (`monitor` namespace)** — run KQL queries against Log Analytics directly from Copilot
+
+**Important:** For the core health check mechanism — running PowerShell on Arc-enrolled servers via `az connectedmachine run-command` — you still need `az CLI` in the terminal. The plugin has no `connectedmachine` MCP namespace, so Arc Run Commands are not covered. The layered approach is:
+
+```
+Copilot CLI health check workflow:
+│
+├── Azure Skills Plugin (azure-observability / azure-diagnostics)
+│   └── Query Log Analytics for Perf counters, event logs, KQL trends
+│       (replaces manual "az monitor log-analytics query" for some queries)
+│
+├── Our wintel-health-check-investigation skill (REQUIRED)
+│   └── Wintel-specific thresholds, escalation logic, SOP procedures
+│
+└── az CLI in terminal (REQUIRED for Arc Run Commands)
+    └── az connectedmachine run-command → execute PowerShell on servers
+        (disk analysis, service checks, event log deep-dives)
+```
+
+## Step 3: Verify Skills Are Loaded
 
 ```
 /skills list
@@ -81,7 +121,7 @@ Available skills:
 
 All 5 skills from `sre-skills/` should appear.
 
-## Step 3: Verify Azure CLI Access
+## Step 4: Verify Azure CLI Access
 
 ```bash
 # Confirm Arc servers are visible
@@ -93,7 +133,7 @@ az monitor log-analytics query \
   --analytics-query "Perf | take 1" -o json
 ```
 
-## Step 4: Run Health Check Investigations
+## Step 5: Run Health Check Investigations
 
 ### Example 1 — Full estate health check
 
@@ -195,6 +235,8 @@ consistently above 85%.
 Recommendation: Monitor for another 24-48 hours. If average exceeds 80%,
 investigate top processes on the server.
 ```
+
+> **💡 Azure Skills Plugin:** If you have the [Azure Skills Plugin](https://github.com/microsoft/azure-skills) installed, the `azure-observability` skill can help with Log Analytics queries like this. Copilot may use the plugin's `monitor` MCP namespace to run KQL queries directly, and the `azure-diagnostics` skill to correlate resource health signals from AppLens. This is additive — our `wintel-health-check-investigation` skill still provides the Wintel-specific thresholds and escalation logic that the plugin doesn't have.
 
 ### Example 4 — Create a GLPI ticket
 
@@ -344,4 +386,5 @@ This gives Copilot CLI direct tool access to GLPI without manual `curl` commands
 
 - [README.md](README.md) — comparison of all 4 options
 - [`sre-skills/wintel-health-check-investigation/SKILL.md`](../../../sre-skills/wintel-health-check-investigation/SKILL.md) — skill definition
+- [Azure Skills Plugin](https://github.com/microsoft/azure-skills) — optional add-on for Azure diagnostics, observability, and compliance
 - [GitHub Copilot CLI documentation](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line)

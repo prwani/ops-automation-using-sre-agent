@@ -862,6 +862,8 @@ Defender now active. GLPI #163 logged for audit.
 
 ### What's Different from SRE Agent
 
+> **💡 Tip:** Install the [Azure Skills Plugin](https://github.com/microsoft/azure-skills) for additional Azure diagnostics, observability, and compliance capabilities. The plugin provides 20 Azure skills + 200+ MCP tools that complement our custom Wintel ops skills. For security troubleshooting, `azure-diagnostics` can surface AppLens insights and `azure-observability` can query Log Analytics for Defender-related events. However, the core remediation mechanism — Arc Run Commands to restart services on servers — still requires `az connectedmachine` via the terminal.
+
 | Aspect | SRE Agent | Copilot CLI |
 |--------|-----------|-------------|
 | **Alert trigger** | ✅ Automatic | ❌ Manual (engineer initiates) |

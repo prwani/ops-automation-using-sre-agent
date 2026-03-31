@@ -26,6 +26,7 @@ All options support our skills because **AgentSkills.io is an open standard** su
 | **Regional availability** | Limited (check sre.azure.com) | Any Azure region (self-hosted) | Most Azure regions | Global (runs locally) |
 | **Cost model** | Azure Agent Units (AAUs) | Compute + LLM API costs | Per-agent + LLM costs | Copilot license ($19-39/user/month) |
 | **Best for** | Ops teams wanting turnkey SRE automation | Teams needing full customization | Teams already on Foundry platform | Engineers who work in the terminal |
+| **Optional add-on** | N/A | N/A | N/A | [Azure Skills Plugin](https://github.com/microsoft/azure-skills) — 20 Azure skills + 200 MCP tools for diagnostics, observability, compliance |
 
 ## Skills & Tools Reusability
 
@@ -199,6 +200,70 @@ Shall I create a GLPI ticket for remediation?
 - **Session memory only** — knowledge doesn't persist across sessions (use custom instructions for persistent context)
 - **Best as complement, not replacement** — great for ad-hoc investigation alongside SRE Agent or scripts
 
+### Azure Skills Plugin (Optional Add-On)
+
+The [Azure Skills Plugin](https://github.com/microsoft/azure-skills) adds **20 Azure skills and 200+ MCP tools** to GitHub Copilot CLI, providing deep Azure infrastructure diagnostics without writing any custom code. The plugin **complements** our custom Wintel skills — it does NOT replace them.
+
+**Installation:**
+
+```
+/plugin marketplace add microsoft/azure-skills
+/plugin install azure@azure-skills
+```
+
+**What the plugin provides:**
+
+| Plugin Skill | What It Does |
+|---|---|
+| `azure-diagnostics` | Troubleshooting for Container Apps, Functions, AKS — includes AppLens integration and Azure Monitor KQL queries |
+| `azure-observability` | Azure Monitor metrics, Application Insights, Log Analytics, Alerts, and Workbooks |
+| `azure-compliance` | Compliance auditing via `azqr` tool + Key Vault checks |
+| `azure-resource-lookup` | Azure Resource Graph queries for resource discovery |
+| `azure-rbac` | Role assignment guidance and troubleshooting |
+| `azure-cost-optimization` | Cost analysis and optimization recommendations |
+| Azure MCP Server (`monitor` namespace) | Query Log Analytics workspaces with KQL directly from Copilot |
+
+**What the plugin does NOT provide (gaps our custom skills fill):**
+
+| Gap | Why It Matters | Our Solution |
+|---|---|---|
+| Arc Run Commands | Cannot execute PowerShell on Arc-enrolled servers (no `connectedmachine` MCP namespace) | `az connectedmachine run-command` via terminal |
+| Defender for Cloud regulatory compliance | Plugin uses `azqr` instead of CIS/NIST standards from Defender | `az security regulatory-compliance-*` via terminal |
+| Azure Policy state queries | No policy compliance data | `az policy state` via terminal |
+| Azure Update Manager | No patch assessment or deployment | `az rest` / Update Manager API via terminal |
+| Hyper-V / VMware snapshot management | No hypervisor operations | Our `vmware-bau-operations` skill |
+| GLPI ITSM / CMDB integration | No ITSM connectivity | Our `glpi_tools.py` + MCP server |
+| Wintel domain expertise | No Windows server SOPs, escalation procedures, or thresholds | Our 5 custom SKILL.md files |
+
+**Correct architecture with the plugin:**
+
+```
+GitHub Copilot CLI
+├── Azure Skills Plugin (add-on for Azure infrastructure)
+│   ├── azure-diagnostics (AppLens, Monitor, KQL)
+│   ├── azure-observability (metrics, alerts, workbooks)
+│   ├── azure-compliance (azqr compliance scans)
+│   ├── azure-resource-lookup (Resource Graph)
+│   └── Azure MCP Server (200+ tools)
+│
+├── Our Custom Skills (Wintel domain expertise — REQUIRED)
+│   ├── wintel-health-check-investigation
+│   ├── security-agent-troubleshooting
+│   ├── patch-validation
+│   ├── compliance-investigation
+│   └── vmware-bau-operations
+│
+├── az CLI in terminal (fills MCP gaps)
+│   ├── az connectedmachine (Arc Run Commands)
+│   ├── az security (Defender for Cloud)
+│   ├── az policy state (Azure Policy)
+│   └── az graph query (Resource Graph)
+│
+└── Custom GLPI tools (Python scripts or curl)
+```
+
+**Key principle:** The plugin gives Copilot CLI richer Azure infrastructure awareness (KQL queries, resource diagnostics, compliance scanning). Our custom skills give it Wintel domain expertise (SOPs, thresholds, escalation logic). Together they make Option C significantly more capable — but the custom skills remain essential for our operational scenarios.
+
 ## Recommendation Decision Tree
 
 ```
@@ -233,6 +298,8 @@ Is Azure SRE Agent available in your region?
 | **Agent Framework** | Copy as-is | Wrap as FunctionTool | Build SDK wrapper | Build webhook handler | ~2-3 weeks |
 | **Foundry Agent Service** | Convert to instructions | Convert to function defs | Build function tools | Build trigger | ~1-2 weeks |
 | **GitHub Copilot CLI** | Copy to `.github/skills/` | Already available (az CLI) | Already available (terminal) | Not supported (interactive) | **~1 day** |
+
+> **💡 Copilot CLI Tip:** Install the [Azure Skills Plugin](https://github.com/microsoft/azure-skills) for additional Azure diagnostics, observability, and compliance capabilities via 200+ MCP tools. The plugin complements our custom Wintel ops skills — see [Azure Skills Plugin (Optional Add-On)](#azure-skills-plugin-optional-add-on) above.
 
 ## Key Principle: Skills Are the Portable Asset
 

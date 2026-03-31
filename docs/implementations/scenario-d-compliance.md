@@ -646,6 +646,8 @@ the "CIS L1 - Audit Policy" GPO to the server's OU.
 
 ### Limitations
 
+> **💡 Tip:** Install the [Azure Skills Plugin](https://github.com/microsoft/azure-skills) for additional Azure diagnostics, observability, and compliance capabilities. The plugin provides 20 Azure skills + 200+ MCP tools that complement our custom Wintel ops skills. For compliance, the plugin's `azure-compliance` skill uses `azqr` (Azure Quick Review) for infrastructure compliance scanning — this is different from our Defender for Cloud approach (CIS, NIST, PCI DSS standards) but both are valid, complementary compliance tools. Use `azure-compliance` for Azure resource configuration checks and our `compliance-investigation` skill for regulatory framework compliance.
+
 | Limitation | Impact | Workaround |
 |---|---|---|
 | **Interactive only** | No scheduled compliance reports | Run automation script via cron; use Copilot for ad-hoc analysis |

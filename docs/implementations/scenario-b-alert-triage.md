@@ -626,6 +626,8 @@ Auto-remediated by restarting the service. GLPI #159 created.
 
 ### What's Different from SRE Agent
 
+> **💡 Tip:** Install the [Azure Skills Plugin](https://github.com/microsoft/azure-skills) for additional Azure diagnostics, observability, and compliance capabilities. The plugin provides 20 Azure skills + 200+ MCP tools that complement our custom Wintel ops skills. For example, `azure-diagnostics` can help correlate alert signals from AppLens, and `azure-observability` can query Log Analytics directly. Our custom skills remain essential for Arc Run Commands, Defender-specific troubleshooting, and GLPI integration.
+
 | Aspect | SRE Agent | Copilot CLI |
 |--------|-----------|-------------|
 | **Alert reception** | ✅ Automatic | ❌ Manual (engineer initiates) |

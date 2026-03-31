@@ -860,6 +860,8 @@ Shall I create a P1 GLPI ticket for this?
 
 ### Limitations
 
+> **💡 Tip:** Install the [Azure Skills Plugin](https://github.com/microsoft/azure-skills) for additional Azure diagnostics, observability, and compliance capabilities. The plugin provides 20 Azure skills + 200+ MCP tools that complement our custom Wintel ops skills. For patching, `azure-observability` can help query Log Analytics for post-patch event logs, and `azure-diagnostics` can surface resource health signals. However, Azure Update Manager operations and Arc Run Commands for pre/post-patch checks still require `az CLI` in the terminal.
+
 | Limitation | Impact | Workaround |
 |---|---|---|
 | **Interactive only** | No scheduled patch assessments | Run automation script via cron; use Copilot for ad-hoc risk analysis |
