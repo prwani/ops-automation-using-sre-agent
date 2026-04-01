@@ -1,6 +1,6 @@
 ---
 name: patch-validation
-description: Validates server health before and after Windows patch deployment. Assesses rollback need.
+description: Validates server health before and after Windows and Linux patch deployment. Assesses rollback need.
 ---
 
 # Patch Validation
@@ -9,23 +9,23 @@ Execute these steps IN ORDER. Do not skip steps or explore the repo.
 
 ## Scope
 
-This skill works across ALL Arc-enrolled Windows servers in your tenant by default.
+This skill works across ALL Arc-enrolled servers (Windows and Linux) in your tenant by default.
 
 - To check all servers: just ask "validate patching for all servers"
 - To narrow scope: specify a resource group or subscription, e.g. "pre-patch check for servers in rg-production"
 - The skill auto-discovers servers and Log Analytics workspaces — nothing is hardcoded
 
-## Step 1 — Discover Arc-enrolled Windows servers
+## Step 1 — Discover ALL Arc-enrolled servers (Windows + Linux)
 
 If the user specified a resource group, add `| where resourceGroup =~ 'USER_RG'`. If the user specified a subscription, add `| where subscriptionId == 'USER_SUB'`.
 
 **All servers (default):**
 
 ```shell
-az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | where properties.osName has 'Windows' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
 ```
 
-Record the server names, resource groups, and locations from the output — you will use them in all subsequent steps.
+Record the server names, resource groups, OS types, and locations from the output — you will use them in all subsequent steps. Note which servers are Windows and which are Linux so you can use the correct run-command scripts later.
 
 ## Step 2 — Discover Log Analytics workspace
 
@@ -53,10 +53,18 @@ az graph query -q "patchinstallationresources | where type == 'microsoft.hybridc
 
 Run ONE run-command per server that checks disk space, pending reboot, and critical services in a single script. Use `--no-wait` to launch servers in parallel, then poll for results.
 
-For each server discovered in Step 1, replace `SERVER_RG`, `SERVER_NAME`, and `SERVER_LOCATION`:
+For each server discovered in Step 1, replace `SERVER_RG`, `SERVER_NAME`, and `SERVER_LOCATION`. Use the correct script based on the server's OS type.
+
+**For Windows servers:**
 
 ```shell
 az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name prePatchCheck --location SERVER_LOCATION --script 'Write-Output "=== DISK ==="; $d = Get-PSDrive C; $pct = [math]::Round(($d.Free / ($d.Used + $d.Free)) * 100, 1); Write-Output "C: $pct% free ($([math]::Round($d.Free/1GB,1))GB)"; if ($pct -lt 20) { Write-Output "DISK: FAIL" } else { Write-Output "DISK: PASS" }; Write-Output "=== REBOOT ==="; $cbs = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"; $wu = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"; Write-Output "CBS RebootPending: $cbs  WU RebootRequired: $wu"; if ($cbs -or $wu) { Write-Output "REBOOT: WARNING" } else { Write-Output "REBOOT: PASS" }; Write-Output "=== SERVICES ==="; Get-Service wuauserv,WinRM,WinDefend,EventLog,W32Time -ErrorAction SilentlyContinue | Select-Object Name,Status | Format-Table -AutoSize; Write-Output "=== BASELINE ==="; Get-Service | Where-Object { $_.StartType -eq "Automatic" -and $_.Status -eq "Running" } | Select-Object Name,Status | Sort-Object Name | Format-Table -AutoSize' --no-wait
+```
+
+**For Linux servers:**
+
+```shell
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name prePatchCheck --location SERVER_LOCATION --script 'echo "=== DISK ==="; df -h /; echo "=== REBOOT ==="; [ -f /var/run/reboot-required ] && echo "REBOOT PENDING" || echo "No reboot needed"; echo "=== SERVICES ==="; systemctl list-units --failed' --no-wait
 ```
 
 Then poll results (run for each server):
@@ -74,8 +82,8 @@ az connectedmachine run-command show --resource-group SERVER_RG --machine-name S
 
 Present a summary table with one row per discovered server:
 
-| Server | Resource Group | Disk Space | Pending Reboot | Services Baseline | Ready to Patch? |
-|--------|---------------|-----------|----------------|-------------------|-----------------|
+| Server | OS | Resource Group | Disk Space | Pending Reboot | Services Baseline | Ready to Patch? |
+|--------|----|---------------|-----------|----------------|-------------------|-----------------|
 
 If all servers PASS, patching can proceed. If any server has FAIL, explain why and recommend remediation.
 
@@ -105,8 +113,8 @@ az monitor log-analytics query --workspace WORKSPACE_ID --analytics-query "Updat
 
 Present a table with one row per discovered server:
 
-| Server | Resource Group | Rebooted | Services OK | Event Errors | Patches Cleared | Status |
-|--------|---------------|----------|-------------|--------------|-----------------|--------|
+| Server | OS | Resource Group | Rebooted | Services OK | Event Errors | Patches Cleared | Status |
+|--------|----|---------------|----------|-------------|--------------|-----------------|--------|
 
 ## Step 7 — Rollback decision matrix
 

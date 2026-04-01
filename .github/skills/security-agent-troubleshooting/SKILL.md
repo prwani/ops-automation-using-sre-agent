@@ -1,6 +1,6 @@
 ---
 name: security-agent-troubleshooting
-description: Diagnoses and remediates Microsoft Defender for Endpoint agent issues on Windows servers.
+description: Diagnoses and remediates Microsoft Defender for Endpoint agent issues on Windows and Linux servers.
 ---
 
 # Security Agent Troubleshooting
@@ -9,29 +9,29 @@ Execute these steps IN ORDER. Do not skip steps or explore the repo.
 
 ## Scope
 
-This skill works across ALL Arc-enrolled Windows servers in your tenant by default.
+This skill works across ALL Arc-enrolled servers (Windows and Linux) in your tenant by default.
 
 - To check all servers: just ask "check Defender health on all servers"
 - To narrow scope: specify a resource group or subscription, e.g. "check MDE agent in rg-production"
 - The skill auto-discovers servers and Log Analytics workspaces — nothing is hardcoded
 
-## Step 1 — Discover Arc-enrolled Windows servers
+## Step 1 — Discover ALL Arc-enrolled servers (Windows + Linux)
 
 If the user specified a resource group, add `| where resourceGroup =~ 'USER_RG'`. If the user specified a subscription, add `| where subscriptionId == 'USER_SUB'`.
 
 **All servers (default):**
 
 ```shell
-az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | where properties.osName has 'Windows' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
 ```
 
 **Scoped to a resource group:**
 
 ```shell
-az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | where properties.osName has 'Windows' | where resourceGroup =~ 'USER_RG' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | where resourceGroup =~ 'USER_RG' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
 ```
 
-Record the server names, resource groups, and locations from the output. Confirm servers are Connected. If any server shows Disconnected, note it — remaining steps will not work for that machine.
+Record the server names, resource groups, OS types, and locations from the output. Note which servers are Windows and which are Linux. Confirm servers are Connected. If any server shows Disconnected, note it — remaining steps will not work for that machine.
 
 ## Step 2 — Check Defender extension status for ALL discovered servers
 
@@ -71,10 +71,18 @@ If any server shows StaleMinutes > 30, flag it as WARNING. If StaleMinutes > 120
 
 ## Step 4 — Diagnose unhealthy servers via Arc run-command
 
-For each server flagged in Steps 2–3, run ONE combined diagnostic command. Use the server's resource group and location from Step 1:
+For each server flagged in Steps 2–3, run ONE combined diagnostic command. Use the server's resource group and location from Step 1. Use the correct script based on the server's OS type.
+
+**For Windows servers:**
 
 ```shell
 az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeDiag --location SERVER_LOCATION --async-execution true --script 'Write-Output "=== SERVICES ==="; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize; Write-Output "=== DEFENDER STATUS ==="; Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List; Write-Output "=== RECENT EVENTS ==="; Get-WinEvent -LogName "Microsoft-Windows-Windows Defender/Operational" -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-Table -Wrap; Write-Output "=== CONNECTIVITY ==="; Test-NetConnection winatp-gw-weu.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded; Test-NetConnection us-v20.events.data.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded'
+```
+
+**For Linux servers:**
+
+```shell
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeDiag --location SERVER_LOCATION --async-execution true --script 'echo "=== SERVICES ==="; systemctl status mdatp 2>/dev/null || echo "MDE not installed"; echo "=== DEFENDER STATUS ==="; mdatp health 2>/dev/null || echo "mdatp CLI not available"; echo "=== CONNECTIVITY ==="; curl -s -o /dev/null -w "%{http_code}" https://winatp-gw-weu.microsoft.com || echo "Connectivity check failed"'
 ```
 
 After dispatching commands for all unhealthy servers, batch-read results:
@@ -97,16 +105,28 @@ Evaluate each section of the output:
 
 Skip this step entirely if Step 4 found no issues or only connectivity failures (those require firewall changes).
 
-**Service stopped → Restart it:**
+**Windows — Service stopped → Restart it:**
 
 ```shell
 az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeRestart --location SERVER_LOCATION --async-execution true --script 'Restart-Service WinDefend -Force -ErrorAction SilentlyContinue; Start-Service Sense -ErrorAction SilentlyContinue; Start-Service MdCoreSvc -ErrorAction SilentlyContinue; Start-Sleep -Seconds 10; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status | Format-Table -AutoSize'
 ```
 
-**Definitions stale → Force update:**
+**Windows — Definitions stale → Force update:**
 
 ```shell
 az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeUpdate --location SERVER_LOCATION --async-execution true --script 'Update-MpSignature -UpdateSource MicrosoftUpdateServer -ErrorAction SilentlyContinue; Start-Sleep -Seconds 30; Get-MpComputerStatus | Select-Object AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List'
+```
+
+**Linux — Service stopped → Restart it:**
+
+```shell
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeRestart --location SERVER_LOCATION --async-execution true --script 'sudo systemctl restart mdatp; sleep 10; systemctl status mdatp'
+```
+
+**Linux — Definitions stale → Force update:**
+
+```shell
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeUpdate --location SERVER_LOCATION --async-execution true --script 'sudo mdatp definitions update; sleep 10; mdatp health'
 ```
 
 After remediation, re-read the run-command results to verify the fix took effect. Do NOT attempt remediation for connectivity issues — those require firewall changes.
@@ -115,8 +135,8 @@ After remediation, re-read the run-command results to verify the fix took effect
 
 Present results as a table with one row per discovered server:
 
-| Server | Resource Group | WinDefend | Sense | MdCoreSvc | Definitions Age | RealTime | Connectivity | Status |
-|--------|---------------|-----------|-------|-----------|-----------------|----------|--------------|--------|
+| Server | OS | Resource Group | WinDefend/mdatp | Sense | MdCoreSvc | Definitions Age | RealTime | Connectivity | Status |
+|--------|----|---------------|-----------------|-------|-----------|-----------------|----------|--------------|--------|
 
 ## Step 7 — Create GLPI ticket if escalation needed
 
