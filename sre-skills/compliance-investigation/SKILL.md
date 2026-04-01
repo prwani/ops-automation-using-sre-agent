@@ -1,114 +1,146 @@
 ---
 name: compliance-investigation
-version: 1.1.0
-description: Investigates non-compliant controls found by Microsoft Defender for Cloud AND Azure Policy, correlates findings across both sources, and prioritizes remediation.
-triggers:
-  - Compliance score drops >5% in 24 hours
-  - New high-severity compliance finding detected
-  - Azure Policy reports non-compliant resources
-  - User asks about compliance status
-tools:
-  - RunAzCliReadCommands
-  - RunAzCliWriteCommands
-  - glpi-create-ticket
-  - generate-compliance-report
-sop_source: docs/sops/compliance-reporting.md
+description: Investigates non-compliant controls found by Microsoft Defender for Cloud AND Azure Policy, correlates findings across both sources, and prioritizes remediation. Use when asked about compliance, policy violations, CIS benchmarks, or regulatory standards.
 ---
 
 # Compliance Investigation
 
-## Context
+Execute these steps IN ORDER. Do not skip steps or explore the repo.
 
-Investigates compliance across **two sources**:
-1. **Microsoft Defender for Cloud** — regulatory compliance (CIS, NIST, ISO 27001, PCI DSS)
-2. **Azure Policy** — custom and built-in policy assignments on Arc-enrolled servers
+## Environment
 
-Both sources are queried and findings are correlated to provide a unified compliance view.
+- Subscription: `31adb513-7077-47bb-9567-8e9d2a462bcf`
+- Resource Group: `rg-arcbox-itpro`
+- Region: `swedencentral`
+- Log Analytics Workspace ID: `f98fca75-7479-45e5-bf0c-87b56a9f9e8c`
+- Windows servers: `ArcBox-Win2K22`, `ArcBox-Win2K25`, `ArcBox-SQL`
+- Linux servers: `Arcbox-Ubuntu-01`, `Arcbox-Ubuntu-02`
+- GLPI URL: `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
 
-## Investigation Steps
+## Step 1 — Get Defender for Cloud regulatory compliance status
 
-### Step 1 — Get Defender for Cloud compliance state
-```
-az security regulatory-compliance-standards list --query "[].{Standard:name, State:state, PassedControls:passedControls, FailedControls:failedControls}" -o table
-```
-
-For specific failing controls:
-```
-RunAzCliReadCommands: az graph query -q "SecurityResources | where type == 'microsoft.security/regulatorycompliancestandards/regulatorycompliancecontrols/regulatorycomplianceassessments' | where subscriptionId == '<subscription_id>' | extend standard = tostring(properties.regulatoryComplianceStandardName) | where standard contains 'CIS' | extend state = tostring(properties.state) | where state == 'Failed'" --subscriptions <subscription_id> -o json
+```shell
+az security regulatory-compliance-standards list --query "[].{Standard:name, State:state, PassedControls:passedControls, FailedControls:failedControls, SkippedControls:skippedControls}" -o table
 ```
 
-Identify failing controls with highest impact (most affected servers × severity).
+For any standard with FailedControls > 0, drill into the failing controls:
 
-### Step 2 — Get Azure Policy compliance state
+```shell
+az security regulatory-compliance-controls list --standard-name STANDARD_NAME --query "[?state=='Failed'].{Control:name, State:state, FailedAssessments:failedAssessments, Description:description}" -o table
 ```
+
+Replace `STANDARD_NAME` with the standard name from the previous output (e.g., `CIS-Microsoft-Azure-Foundations-Benchmark-v2.0.0`).
+
+## Step 2 — Get Azure Policy compliance state
+
+Summary of non-compliant policies:
+
+```shell
 az policy state summarize --resource-group rg-arcbox-itpro --query "value[].{Policy:policyDefinitionName, NonCompliant:results.nonCompliantResources, Total:results.totalResources}" -o table
 ```
 
-For detailed non-compliant resources:
-```
-az policy state list --resource-group rg-arcbox-itpro --filter "complianceState eq 'NonCompliant'" --query "[].{Resource:resourceId, Policy:policyDefinitionName, State:complianceState}" -o table
+Detailed list of non-compliant resources:
+
+```shell
+az policy state list --resource-group rg-arcbox-itpro --filter "complianceState eq 'NonCompliant'" --query "[].{Resource:resourceId, Policy:policyDefinitionName, State:complianceState, Timestamp:timestamp}" -o table
 ```
 
-Check policy assignments and their definitions:
-```
+List active policy assignments:
+
+```shell
 az policy assignment list --resource-group rg-arcbox-itpro --query "[].{Name:displayName, PolicyId:policyDefinitionId, Enforcement:enforcementMode}" -o table
 ```
 
-### Step 3 — Correlate findings across both sources
+## Step 3 — Correlate findings across both sources
 
-Compare Defender for Cloud findings with Azure Policy findings:
-- **Overlap**: Some Defender recommendations map to Azure Policy (e.g., CIS benchmarks use Guest Configuration policies). Note these to avoid duplicate remediation tickets.
-- **Defender-only**: Findings from Defender vulnerability assessment, endpoint protection, etc.
-- **Policy-only**: Custom organizational policies (naming conventions, tagging, allowed SKUs, required extensions).
+After collecting results from Steps 1 and 2, categorize each finding:
 
-Categorize:
-| Source | Finding Type | Example |
-|---|---|---|
-| Defender + Policy | CIS/regulatory benchmarks | "Audit policy not configured" — found by both |
-| Defender only | Threat protection, vulnerability | "Endpoint protection not installed" |
-| Policy only | Organizational governance | "Required tag 'CostCenter' missing", "Allowed VM SKUs" |
+| Category | Source | Example |
+|----------|--------|---------|
+| **Overlap** (Defender + Policy) | Both | CIS benchmark controls that map to Guest Configuration policies — deduplicate these |
+| **Defender-only** | Defender for Cloud | Threat protection, vulnerability assessments, endpoint protection coverage |
+| **Policy-only** | Azure Policy | Tagging requirements, allowed VM SKUs, naming conventions, required extensions |
 
-### Step 4 — Spot-check on a server
-```
-RunAzCliReadCommands(server_id=<affected_server_id>, script=<control-specific check>)
-```
+Deduplicate: If the same issue appears in both Defender and Policy, count it once and note both sources.
 
-Common checks:
-- Audit policy: `auditpol /get /category:*`
-- Windows Firewall: `Get-NetFirewallProfile | Select Name, Enabled | ConvertTo-Json`
-- Password policy: `net accounts`
-- Auto-update: `Get-ItemProperty HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU`
-- Guest Configuration results: `az policy state list --resource <arc_server_id> --filter "policyDefinitionAction eq 'AuditIfNotExists'" -o table`
-- Installed extensions: `az connectedmachine extension list --machine-name <name> --resource-group rg-arcbox-itpro -o table`
+## Step 4 — Spot-check compliance on affected servers
 
-### Step 5 — Classify and prioritize
+For Windows servers with compliance failures, run targeted checks via Arc Run Command.
 
-| Priority | Criteria | Action |
-|---|---|---|
-| **P1 Critical** | Defender Sev High + Policy NonCompliant on Tier 0 server | Immediate ticket + Teams alert |
-| **P2 High** | CIS control failure affecting >3 servers | Ticket within 24h |
-| **P3 Medium** | Policy non-compliance (tagging, naming) | Ticket for next sprint |
-| **P4 Low** | Known exceptions (check `references/cis-exceptions.json`) | Document and skip |
+**Audit policy check:**
 
-### Step 6 — Create remediation tickets
-
-For each finding (or grouped findings):
-```
-glpi-create-ticket(
-  title="[Compliance] <Source>: <Control/Policy> — <N> servers affected",
-  priority="<P1-P4>",
-  description=<include: control ID, affected servers, remediation steps, risk, whether it's Defender or Policy finding>
-)
+```shell
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compAuditPol --location swedencentral --script "auditpol /get /category:* | Select-String 'No Auditing'" --no-wait
 ```
 
-### Step 7 — Generate unified compliance report
-```
-generate-compliance-report(subscription_id=<subscription_id>, format="html")
+**Windows Firewall check:**
+
+```shell
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compFirewall --location swedencentral --script "Get-NetFirewallProfile | Select-Object Name,Enabled | Format-Table -AutoSize" --no-wait
 ```
 
-The report should include:
-1. **Defender for Cloud**: Regulatory compliance % per standard (CIS, NIST, etc.)
-2. **Azure Policy**: Non-compliant resource count per policy assignment
-3. **Combined**: Total unique findings, deduplicated across both sources
-4. **Trend**: Compare with previous report if available
-5. **Top 10 actions**: Prioritized remediation items
+**Password policy check:**
+
+```shell
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compPwdPolicy --location swedencentral --script "net accounts" --no-wait
+```
+
+**Installed extensions check (direct az CLI):**
+
+```shell
+az connectedmachine extension list --machine-name SERVER_NAME --resource-group rg-arcbox-itpro --query "[].{Name:name, Type:properties.type, Status:properties.provisioningState}" -o table
+```
+
+Then check run-command results:
+
+```shell
+az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name COMMAND_NAME --query "instanceView.{state:executionState, output:output, error:error}" -o json
+```
+
+## Step 5 — Classify and prioritize findings
+
+Assign each finding a priority:
+
+| Priority | Criteria | SLA |
+|----------|----------|-----|
+| **P1 Critical** | Defender severity High + Policy NonCompliant on production server; security controls disabled | Ticket immediately |
+| **P2 High** | CIS control failure affecting 3+ servers; missing security extensions | Ticket within 24 hours |
+| **P3 Medium** | Policy non-compliance for tagging, naming, or non-security config | Ticket for next sprint |
+| **P4 Low** | Informational findings, known exceptions, low-severity Defender recommendations | Document only, no ticket |
+
+## Step 6 — Summarize compliance posture
+
+Present a compliance summary table:
+
+| Source | Total Controls | Passed | Failed | Compliance % |
+|--------|---------------|--------|--------|-------------|
+| Defender for Cloud - CIS | _total_ | _pass_ | _fail_ | _pct_% |
+| Defender for Cloud - NIST | _total_ | _pass_ | _fail_ | _pct_% |
+| Azure Policy | _total_ | _compliant_ | _non-compliant_ | _pct_% |
+
+Then list the top 10 findings by priority:
+
+| # | Priority | Source | Finding | Affected Servers | Remediation |
+|---|----------|--------|---------|-----------------|-------------|
+| 1 | P1 | Defender+Policy | _description_ | _server list_ | _action_ |
+| 2 | P2 | Defender | _description_ | _server list_ | _action_ |
+
+## Step 7 — Create GLPI tickets for P1 and P2 findings
+
+For each P1 or P2 finding (or group related findings into one ticket):
+
+First, initialize a GLPI session:
+
+```shell
+curl -s -X GET -H "Content-Type: application/json" -H "Authorization: user_token YOUR_TOKEN" -H "App-Token: YOUR_APP_TOKEN" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession"
+```
+
+Then create the ticket (replace SESSION_TOKEN with the value from initSession):
+
+```shell
+curl -s -X POST -H "Content-Type: application/json" -H "Session-Token: SESSION_TOKEN" -H "App-Token: YOUR_APP_TOKEN" -d "{\"input\": {\"name\": \"[Compliance] SOURCE: CONTROL_NAME — N servers affected\", \"content\": \"Priority: P_LEVEL\\nSource: Defender/Policy/Both\\nAffected servers: SERVER_LIST\\nFinding: DESCRIPTION\\nRemediation: STEPS\", \"type\": 1, \"urgency\": URGENCY_LEVEL, \"priority\": PRIORITY_LEVEL}}" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket"
+```
+
+Priority mapping: P1 → urgency=5,priority=5 | P2 → urgency=4,priority=4 | P3 → urgency=3,priority=3
+
+If GLPI credentials are not available, report the findings and recommend the user create a ticket manually.
