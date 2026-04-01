@@ -26,13 +26,13 @@ If any show Disconnected, report that and stop.
 This single query returns CPU, memory, AND disk for all servers in one call:
 
 ```shell
-az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Perf | where TimeGenerated > ago(1h) | where Computer in~ ('ArcBox-Win2K22','ArcBox-Win2K25','ArcBox-SQL') | where (ObjectName == 'Processor' and CounterName == '% Processor Time' and InstanceName == '_Total') or (ObjectName == 'Memory' and CounterName == '% Committed Bytes In Use') or (ObjectName == 'LogicalDisk' and CounterName == '% Free Space' and InstanceName != '_Total') | summarize AvgValue=round(avg(CounterValue),1), MaxValue=round(max(CounterValue),1) by Computer, ObjectName, CounterName, InstanceName | order by Computer, ObjectName" -o table
+az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Perf | where TimeGenerated > ago(1h) | where Computer in~ ('ArcBox-Win2K22','ArcBox-Win2K25','ArcBox-SQL') | where (ObjectName == 'Processor Information' and CounterName == '% Processor Time' and InstanceName == '_Total') or (ObjectName == 'Memory' and CounterName == '% Committed Bytes In Use') or (ObjectName == 'LogicalDisk' and CounterName == '% Free Space' and InstanceName == 'C:') | summarize AvgValue=round(avg(CounterValue),1), MaxValue=round(max(CounterValue),1) by Computer, ObjectName, CounterName | order by Computer, ObjectName" -o table
 ```
 
 Evaluate thresholds from the output:
 - CPU (% Processor Time) avg > 85 → CRITICAL, > 75 → WARNING
 - Memory (% Committed Bytes In Use) avg > 85 → CRITICAL, > 75 → WARNING
-- Disk (% Free Space) avg < 10 → CRITICAL, < 20 → WARNING
+- Disk (% Free Space) avg < 10 → CRITICAL (less than 10% free), < 20 → WARNING
 
 ## Step 3 — Check Services and Event Logs (ONE command per server, batched)
 
