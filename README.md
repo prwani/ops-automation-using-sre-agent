@@ -135,7 +135,7 @@ See [TESTING.md](TESTING.md) for the quick-start guide.
 
 **Quick test (copy-paste):**
 ```bash
-copilot -p "Check the health of all my Arc servers" --allow-all-tools
+copilot -p "Use the /wintel-health-check-investigation skill. Run a FULL health check on all my Arc servers — check CPU, memory, disk, services, and event logs." --allow-all-tools
 ```
 
 **Automation scripts (no AI):**
@@ -160,3 +160,4 @@ copilot -p "Check the health of all my Arc servers" --allow-all-tools
 ## License
 
 [MIT](LICENSE)
+

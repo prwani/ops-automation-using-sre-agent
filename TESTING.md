@@ -31,34 +31,34 @@ You should see 5 skills: wintel-health-check-investigation, security-agent-troub
 
 ### Step 4: Run your first test
 ```bash
-copilot -p "Check the health of all my Arc servers" --allow-all-tools
+copilot -p "Use the /wintel-health-check-investigation skill. Run a FULL health check on all my Arc servers — check CPU, memory, disk usage, services, and event logs. Show a summary table with all metrics and flag any warnings or critical issues." --allow-all-tools
 ```
 
 ## All Test Commands (Copy-Paste Ready)
 
 ### Skill 1: Health Check
 ```bash
-copilot -p "Use the /wintel-health-check-investigation skill to check health of all my Arc servers" --allow-all-tools
+copilot -p "Use the /wintel-health-check-investigation skill. Run a FULL health check — query Log Analytics for CPU, memory, disk on ALL Arc servers. Then check services and event logs via Arc Run Commands. Summarize in a table with OK/WARNING/CRITICAL per server." --allow-all-tools
 ```
 
 ### Skill 2: Security Agent
 ```bash
-copilot -p "Use the /security-agent-troubleshooting skill to check if Defender is healthy on all my Arc servers" --allow-all-tools
+copilot -p "Use the /security-agent-troubleshooting skill. Check Defender agent health on ALL Arc servers — verify extensions are installed, check heartbeat in Log Analytics, and run diagnostics on any unhealthy agents. Show a status table per server." --allow-all-tools
 ```
 
 ### Skill 3: Compliance
 ```bash
-copilot -p "Use the /compliance-investigation skill to check compliance status of all my Arc servers" --allow-all-tools
+copilot -p "Use the /compliance-investigation skill. Query Defender for Cloud regulatory compliance AND Azure Policy state for all Arc servers. List failing controls, non-compliant resources, and prioritize findings as P1-P4." --allow-all-tools
 ```
 
 ### Skill 4: Patch Assessment
 ```bash
-copilot -p "Use the /patch-validation skill to assess missing patches on all my Arc servers" --allow-all-tools
+copilot -p "Use the /patch-validation skill. Query Azure Update Manager for missing patches on ALL Arc servers. Show patch counts by classification (Critical, Security, Other) per server. Run pre-patch checks (disk space, pending reboots, services) on each server." --allow-all-tools
 ```
 
 ### Skill 5: VMware BAU
 ```bash
-copilot -p "Use the /vmware-bau-operations skill to list all Hyper-V checkpoints and identify any that need cleanup" --allow-all-tools
+copilot -p "Use the /vmware-bau-operations skill. Find all Azure VMs that host Hyper-V, list ALL checkpoints on each, classify by age (KEEP <7d, WARNING 7-30d, CRITICAL >30d), and show a cleanup summary." --allow-all-tools
 ```
 
 ## Automation Scripts (No AI — deterministic)
@@ -92,7 +92,7 @@ Example: test all 5 skills in sequence:
 ```bash
 for skill in "wintel-health-check-investigation" "security-agent-troubleshooting" "compliance-investigation" "patch-validation" "vmware-bau-operations"; do
     echo "=== Testing $skill ==="
-    copilot -p "Use the /$skill skill on all my Arc servers" --allow-all-tools --model gpt-5.4-mini
+    copilot -p "Use the /$skill skill. Run ALL steps on ALL my Arc servers. Show detailed results in a summary table." --allow-all-tools --model gpt-5.4-mini
     echo ""
   done
 ```
@@ -125,3 +125,4 @@ Copilot CLI is one of 4 options. See [docs/ai-tier-options.md](docs/ai-tier-opti
 - Option A: Microsoft Agent Framework
 - Option B: Foundry Agent Service
 - Option C: GitHub Copilot CLI (this guide)
+
