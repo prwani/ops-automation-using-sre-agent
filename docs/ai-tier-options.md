@@ -26,6 +26,10 @@ All options support our skills because **AgentSkills.io is an open standard** su
 | **Regional availability** | Limited (check sre.azure.com) | Any Azure region (self-hosted) | Most Azure regions | Global (runs locally) |
 | **Cost model** | Azure Agent Units (AAUs) | Compute + LLM API costs | Per-agent + LLM costs | Copilot license ($19-39/user/month) |
 | **Best for** | Ops teams wanting turnkey SRE automation | Teams needing full customization | Teams already on Foundry platform | Engineers who work in the terminal |
+| **Identity** | Managed identity (auto-created) | Service principal or managed identity | Managed identity | Your user account (`az login`) |
+| **RBAC setup** | Assign 6 roles to managed identity (~15 min) | Assign 6 roles to SP/MI (~15 min) | Assign 6 roles to MI (~15 min) | **~0 min** — uses your existing Azure access |
+| **Min roles needed** | Reader, LA Reader, Security Reader, Connected Machine Resource Admin, Policy Reader, VM Contributor | Same | Same | Same roles on YOUR account (usually already have Reader + LA Reader) |
+| **RBAC details** | [rbac-requirements.md](rbac-requirements.md) | [rbac-requirements.md](rbac-requirements.md) | [rbac-requirements.md](rbac-requirements.md) | [rbac-requirements.md](rbac-requirements.md) |
 | **Optional add-on** | N/A | N/A | N/A | [Azure Skills Plugin](https://github.com/microsoft/azure-skills) — 20 Azure skills + 200 MCP tools for diagnostics, observability, compliance |
 
 ## Skills & Tools Reusability
