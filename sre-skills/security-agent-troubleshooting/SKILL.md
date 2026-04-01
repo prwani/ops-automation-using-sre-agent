@@ -15,111 +15,87 @@ Execute these steps IN ORDER. Do not skip steps or explore the repo.
 - Windows servers: `ArcBox-Win2K22`, `ArcBox-Win2K25`, `ArcBox-SQL`
 - GLPI URL: `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
 
-## Step 1 — Check Defender extension status on Arc machines
-
-For each server (ArcBox-Win2K22, ArcBox-Win2K25, ArcBox-SQL):
+## Step 1 — List Arc-connected servers (1 command)
 
 ```shell
-az connectedmachine extension list --machine-name SERVER_NAME --resource-group rg-arcbox-itpro --query "[].{Name:name, Type:properties.type, Status:properties.provisioningState, Version:properties.typeHandlerVersion}" -o table
+az connectedmachine list --resource-group rg-arcbox-itpro --query "[].{Name:name, Status:status, OS:osName, LastSeen:lastStatusChange}" -o table
 ```
 
-Look for the `MDE.Windows` or `MicrosoftMonitoringAgent` extension. If missing or Status != Succeeded, note it as CRITICAL.
+Confirm all three Windows servers appear and are Connected. If any server shows Disconnected, note it — remaining steps will not work for that machine.
 
-## Step 2 — Check Defender service status via Arc Run Command
+## Step 2 — Check Defender extension status for ALL servers
 
-For each server:
+Run once per server (lightweight metadata query, no remote execution):
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeServiceCheck --location swedencentral --script "Get-Service -Name WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize" --no-wait
+az connectedmachine extension list --machine-name ArcBox-Win2K22 -g rg-arcbox-itpro --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
 ```
-
-Then check results (poll until executionState is Succeeded):
 
 ```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeServiceCheck --query "instanceView.{state:executionState, output:output, error:error}" -o json
+az connectedmachine extension list --machine-name ArcBox-Win2K25 -g rg-arcbox-itpro --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
 ```
-
-Expected: All three services should show Status=Running.
-- WinDefend stopped → CRITICAL
-- Sense stopped → CRITICAL
-- MdCoreSvc stopped → WARNING
-
-## Step 3 — Check Defender definitions and real-time protection
-
-For each server:
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeDefinitions --location swedencentral --script "Get-MpComputerStatus | Select-Object AntivirusSignatureAge,AntivirusSignatureLastUpdated,RealTimeProtectionEnabled,AntivirusEnabled,AMServiceEnabled,OnAccessProtectionEnabled | Format-List" --no-wait
+az connectedmachine extension list --machine-name ArcBox-SQL -g rg-arcbox-itpro --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
 ```
 
-Then check results:
+If the MDE extension is missing or state != Succeeded on any server, note it as CRITICAL.
+
+## Step 3 — Check Defender health via Log Analytics (ONE query for ALL servers)
+
+Query the Log Analytics workspace for heartbeat and security baseline data across all servers in a single call:
 
 ```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeDefinitions --query "instanceView.{state:executionState, output:output, error:error}" -o json
+az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query 'Heartbeat | where Computer in~ ("ArcBox-Win2K22","ArcBox-Win2K25","ArcBox-SQL") | summarize LastHeartbeat=max(TimeGenerated) by Computer | extend StaleMinutes=datetime_diff("minute",now(),LastHeartbeat)' -o table
 ```
 
-Thresholds:
-- AntivirusSignatureAge > 3 → WARNING (definitions stale)
-- AntivirusSignatureAge > 7 → CRITICAL (definitions very stale)
-- RealTimeProtectionEnabled = False → CRITICAL
-- AntivirusEnabled = False → CRITICAL
+If any server shows StaleMinutes > 30, flag it as WARNING. If StaleMinutes > 120, flag as CRITICAL.
 
-## Step 4 — Check Defender event logs for errors
+**Only proceed to Step 4 if** Step 2 shows missing/failed extensions OR Step 3 shows stale heartbeats. If all servers are healthy, skip to Step 6 (Summarize).
 
-For each server:
+## Step 4 — Diagnose unhealthy servers via Arc run-command
+
+For each server flagged in Steps 2–3, run ONE combined diagnostic command that checks services, Defender status, event logs, AND connectivity together. Use `--async-execution true` so commands run in parallel:
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeEventLog --location swedencentral --script "Get-WinEvent -LogName 'Microsoft-Windows-Windows Defender/Operational' -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-Table -Wrap" --no-wait
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeDiag --location swedencentral --async-execution true --script 'Write-Output "=== SERVICES ==="; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize; Write-Output "=== DEFENDER STATUS ==="; Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List; Write-Output "=== RECENT EVENTS ==="; Get-WinEvent -LogName "Microsoft-Windows-Windows Defender/Operational" -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-Table -Wrap; Write-Output "=== CONNECTIVITY ==="; Test-NetConnection winatp-gw-weu.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded; Test-NetConnection us-v20.events.data.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded'
 ```
 
-Then check results:
+After dispatching commands for all unhealthy servers, batch-read results:
 
 ```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeEventLog --query "instanceView.{state:executionState, output:output, error:error}" -o json
+az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeDiag --query "instanceView.{state:executionState, output:output, error:error}" -o json
 ```
 
-Look for Event IDs:
-- 5001 = Real-time protection disabled → CRITICAL
-- 5010/5012 = Scan/definition update failed → WARNING
-- 1116/1117 = Malware detected/action taken → log for awareness
+Evaluate each section of the output:
 
-## Step 5 — Check connectivity to Defender endpoints
+**Services:** WinDefend or Sense stopped → CRITICAL. MdCoreSvc stopped → WARNING.
 
-For each server:
+**Defender status:** AntivirusEnabled=False or RealTimeProtectionEnabled=False → CRITICAL. AntivirusSignatureAge > 3 → WARNING, > 7 → CRITICAL.
 
-```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeConnectivity --location swedencentral --script "foreach (\$ep in @('winatp-gw-weu.microsoft.com','winatp-gw-neu.microsoft.com','us-v20.events.data.microsoft.com')) { \$r = Test-NetConnection -ComputerName \$ep -Port 443 -WarningAction SilentlyContinue; Write-Output \"\$ep : TcpTestSucceeded=\$(\$r.TcpTestSucceeded)\" }" --no-wait
-```
+**Events:** ID 5001 (real-time disabled) → CRITICAL. ID 5010/5012 (update failed) → WARNING. ID 1116/1117 (malware) → log for awareness.
 
-Then check results:
+**Connectivity:** TcpTestSucceeded=False → CRITICAL (firewall issue, do NOT auto-remediate).
 
-```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeConnectivity --query "instanceView.{state:executionState, output:output, error:error}" -o json
-```
+## Step 5 — Remediation (only if Step 4 shows fixable issues)
 
-Any endpoint with TcpTestSucceeded=False → CRITICAL (firewall or network issue)
-
-## Step 6 — Remediation (only if safe)
-
-Based on findings, apply remediations:
+Skip this step entirely if Step 4 found no issues or only connectivity failures (those require firewall changes).
 
 **Service stopped → Restart it:**
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeRestart --location swedencentral --script "Restart-Service WinDefend -Force -ErrorAction SilentlyContinue; Start-Service Sense -ErrorAction SilentlyContinue; Start-Service MdCoreSvc -ErrorAction SilentlyContinue; Start-Sleep -Seconds 10; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status | Format-Table -AutoSize" --no-wait
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeRestart --location swedencentral --async-execution true --script 'Restart-Service WinDefend -Force -ErrorAction SilentlyContinue; Start-Service Sense -ErrorAction SilentlyContinue; Start-Service MdCoreSvc -ErrorAction SilentlyContinue; Start-Sleep -Seconds 10; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status | Format-Table -AutoSize'
 ```
 
 **Definitions stale → Force update:**
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeUpdate --location swedencentral --script "Update-MpSignature -UpdateSource MicrosoftUpdateServer -ErrorAction SilentlyContinue; Start-Sleep -Seconds 30; Get-MpComputerStatus | Select-Object AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List" --no-wait
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeUpdate --location swedencentral --async-execution true --script 'Update-MpSignature -UpdateSource MicrosoftUpdateServer -ErrorAction SilentlyContinue; Start-Sleep -Seconds 30; Get-MpComputerStatus | Select-Object AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List'
 ```
 
-After remediation, re-run Step 2 and Step 3 to verify the fix took effect.
+After remediation, re-read the run-command results to verify the fix took effect. Do NOT attempt remediation for connectivity issues — those require firewall changes.
 
-Do NOT attempt remediation for connectivity issues — those require firewall changes.
-
-## Step 7 — Summarize findings
+## Step 6 — Summarize findings
 
 Present results as a table:
 
@@ -129,9 +105,9 @@ Present results as a table:
 | ArcBox-Win2K25 | ... | ... | ... | ... | ... | ... | ... |
 | ArcBox-SQL | ... | ... | ... | ... | ... | ... | ... |
 
-## Step 8 — Create GLPI ticket if escalation needed
+## Step 7 — Create GLPI ticket if escalation needed
 
-Create a ticket if:
+Create a ticket only if:
 - Any service won't restart after remediation
 - Connectivity is blocked (firewall change needed)
 - Definitions won't update
@@ -140,13 +116,13 @@ Create a ticket if:
 First, initialize a GLPI session:
 
 ```shell
-curl -s -X GET -H "Content-Type: application/json" -H "Authorization: user_token YOUR_TOKEN" -H "App-Token: YOUR_APP_TOKEN" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession"
+curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession'
 ```
 
 Then create the ticket (replace SESSION_TOKEN with the value from initSession):
 
 ```shell
-curl -s -X POST -H "Content-Type: application/json" -H "Session-Token: SESSION_TOKEN" -H "App-Token: YOUR_APP_TOKEN" -d "{\"input\": {\"name\": \"[Security] Defender agent issue: SERVER_NAME - ISSUE_SUMMARY\", \"content\": \"DETAILED_FINDINGS_AND_REMEDIATION_ATTEMPTED\", \"type\": 1, \"urgency\": 4, \"priority\": 4}}" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket"
+curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[Security] Defender agent issue: SERVER_NAME - ISSUE_SUMMARY", "content": "DETAILED_FINDINGS_AND_REMEDIATION_ATTEMPTED", "type": 1, "urgency": 4, "priority": 4}}' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket'
 ```
 
 If GLPI credentials are not available, report the findings and recommend the user create a ticket manually.

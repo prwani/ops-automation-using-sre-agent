@@ -17,7 +17,7 @@ Execute these steps IN ORDER. Do not skip steps or explore the repo.
 - Linux servers: `Arcbox-Ubuntu-01`, `Arcbox-Ubuntu-02`
 - GLPI URL: `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
 
-## Step 1 — Get Defender for Cloud regulatory compliance status
+## Step 1 — Query Defender for Cloud compliance (1 command for all standards)
 
 ```shell
 az security regulatory-compliance-standards list --query "[].{Standard:name, State:state, PassedControls:passedControls, FailedControls:failedControls, SkippedControls:skippedControls}" -o table
@@ -31,21 +31,23 @@ az security regulatory-compliance-controls list --standard-name STANDARD_NAME --
 
 Replace `STANDARD_NAME` with the standard name from the previous output (e.g., `CIS-Microsoft-Azure-Foundations-Benchmark-v2.0.0`).
 
-## Step 2 — Get Azure Policy compliance state
+## Step 2 — Query Azure Policy compliance (batched commands)
 
-Summary of non-compliant policies:
+Run these three commands to get the full policy picture — they cover summary, details, and assignments in one pass:
 
-```shell
-az policy state summarize --resource-group rg-arcbox-itpro --query "value[].{Policy:policyDefinitionName, NonCompliant:results.nonCompliantResources, Total:results.totalResources}" -o table
-```
-
-Detailed list of non-compliant resources:
+**Summary of non-compliant policies:**
 
 ```shell
-az policy state list --resource-group rg-arcbox-itpro --filter "complianceState eq 'NonCompliant'" --query "[].{Resource:resourceId, Policy:policyDefinitionName, State:complianceState, Timestamp:timestamp}" -o table
+az policy state summarize --resource-group rg-arcbox-itpro -o table
 ```
 
-List active policy assignments:
+**Non-compliant resources (1 query for all):**
+
+```shell
+az policy state list --resource-group rg-arcbox-itpro --filter "complianceState eq 'NonCompliant'" --query "[].{Resource:resourceId, Policy:policyDefinitionName}" -o table
+```
+
+**Active policy assignments:**
 
 ```shell
 az policy assignment list --resource-group rg-arcbox-itpro --query "[].{Name:displayName, PolicyId:policyDefinitionId, Enforcement:enforcementMode}" -o table
@@ -63,38 +65,20 @@ After collecting results from Steps 1 and 2, categorize each finding:
 
 Deduplicate: If the same issue appears in both Defender and Policy, count it once and note both sources.
 
-## Step 4 — Spot-check compliance on affected servers
+**Only proceed to Step 4 if** the correlation reveals server-specific compliance failures that need on-machine verification. If all findings are Azure-level policy issues (tagging, SKUs, etc.), skip to Step 5.
 
-For Windows servers with compliance failures, run targeted checks via Arc Run Command.
+## Step 4 — Spot-check compliance on affected servers (only if needed)
 
-**Audit policy check:**
+Only run this step for specific servers flagged in Steps 1–3. For each affected Windows server, run ONE combined diagnostic command that checks audit policy, firewall, and password policy together. Use `--async-execution true` so commands run in parallel across servers:
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compAuditPol --location swedencentral --script "auditpol /get /category:* | Select-String 'No Auditing'" --no-wait
+az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compCheck --location swedencentral --async-execution true --script 'Write-Output "=== AUDIT POLICY ==="; auditpol /get /category:* | Select-String "No Auditing"; Write-Output "=== FIREWALL ==="; Get-NetFirewallProfile | Select-Object Name,Enabled | Format-Table -AutoSize; Write-Output "=== PASSWORD POLICY ==="; net accounts'
 ```
 
-**Windows Firewall check:**
+After dispatching commands for all affected servers, batch-read results:
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compFirewall --location swedencentral --script "Get-NetFirewallProfile | Select-Object Name,Enabled | Format-Table -AutoSize" --no-wait
-```
-
-**Password policy check:**
-
-```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compPwdPolicy --location swedencentral --script "net accounts" --no-wait
-```
-
-**Installed extensions check (direct az CLI):**
-
-```shell
-az connectedmachine extension list --machine-name SERVER_NAME --resource-group rg-arcbox-itpro --query "[].{Name:name, Type:properties.type, Status:properties.provisioningState}" -o table
-```
-
-Then check run-command results:
-
-```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name COMMAND_NAME --query "instanceView.{state:executionState, output:output, error:error}" -o json
+az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compCheck --query "instanceView.{state:executionState, output:output, error:error}" -o json
 ```
 
 ## Step 5 — Classify and prioritize findings
@@ -132,13 +116,13 @@ For each P1 or P2 finding (or group related findings into one ticket):
 First, initialize a GLPI session:
 
 ```shell
-curl -s -X GET -H "Content-Type: application/json" -H "Authorization: user_token YOUR_TOKEN" -H "App-Token: YOUR_APP_TOKEN" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession"
+curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession'
 ```
 
 Then create the ticket (replace SESSION_TOKEN with the value from initSession):
 
 ```shell
-curl -s -X POST -H "Content-Type: application/json" -H "Session-Token: SESSION_TOKEN" -H "App-Token: YOUR_APP_TOKEN" -d "{\"input\": {\"name\": \"[Compliance] SOURCE: CONTROL_NAME — N servers affected\", \"content\": \"Priority: P_LEVEL\\nSource: Defender/Policy/Both\\nAffected servers: SERVER_LIST\\nFinding: DESCRIPTION\\nRemediation: STEPS\", \"type\": 1, \"urgency\": URGENCY_LEVEL, \"priority\": PRIORITY_LEVEL}}" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket"
+curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[Compliance] SOURCE: CONTROL_NAME — N servers affected", "content": "Priority: P_LEVEL\nSource: Defender/Policy/Both\nAffected servers: SERVER_LIST\nFinding: DESCRIPTION\nRemediation: STEPS", "type": 1, "urgency": URGENCY_LEVEL, "priority": PRIORITY_LEVEL}}' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket'
 ```
 
 Priority mapping: P1 → urgency=5,priority=5 | P2 → urgency=4,priority=4 | P3 → urgency=3,priority=3
