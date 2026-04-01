@@ -14,7 +14,7 @@ Step-by-step guide to deploy and configure Azure SRE Agent for the Wintel Ops Au
 2. Click **Create a new agent**
 3. Configure:
    - **Name:** `wintel-ops-agent`
-   - **Subscription:** `31adb513-7077-47bb-9567-8e9d2a462bcf` (or your subscription)
+   - **Subscription:** `<YOUR_SUBSCRIPTION_ID>` (find with `az account show --query id -o tsv`)
    - **Region:** `Sweden Central` (same as ArcBox)
 4. Click **Create** — this provisions a Container App + managed identity automatically
 
@@ -365,4 +365,5 @@ Invoke-Command -VMName ArcBox-Win2K22 -Credential $cred -ScriptBlock {
 | Skills not loading | Ensure skill description matches the context. Skills are loaded automatically — don't use `/skill` command |
 | Subagent not invoked | Type `/agent vm-diagnostics` to explicitly invoke. Check tools are attached. |
 | KQL queries failing | Verify workspace ID `f98fca75-7479-45e5-bf0c-87b56a9f9e8c` is correct, managed identity has Log Analytics Reader role, and you're using `az monitor log-analytics query` (not the Kusto connector) |
+
 

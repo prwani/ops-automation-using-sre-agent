@@ -658,9 +658,10 @@ Auto-remediated by restarting the service. GLPI #159 created.
 
 ## See Also
 
-- [Scenario A — Health Check implementations](implementations/scenario-a-health-check/README.md) — same pattern, different scenario
+- [Scenario A — Health Check implementations](scenario-a-health-check/README.md) — same pattern, different scenario
 - [Scenario C — Security Agent Troubleshooting](scenario-c-security-troubleshooting.md) — related diagnostic scenario
 - [AI tier options comparison](../ai-tier-options.md) — cross-scenario platform comparison
 - [Alert monitoring demo script](../../scripts/demo-alert-monitoring.ps1) — the deterministic 70% automation
 - [`sre-skills/security-agent-troubleshooting/SKILL.md`](../../sre-skills/security-agent-troubleshooting/SKILL.md) — skill definition
 - [`src/alerting/ingestor.py`](../../src/alerting/ingestor.py) — Python alert ingestion (used by Agent Framework option)
+
