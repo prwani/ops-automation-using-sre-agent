@@ -80,3 +80,28 @@ demonstrate intellectual honesty: the architecture uses AI where it genuinely he
 (correlation, diagnosis, prioritisation) and avoids it where simple rule-based logic
 is sufficient. This builds trust with technical audiences who are wary of
 "AI-washing" existing automation.
+
+---
+
+## How to Execute These Scenarios
+
+### Via GitHub Copilot CLI (Interactive AI)
+See the per-scenario implementation guides in [docs/implementations/](../implementations/):
+- [Scenario A — Copilot CLI](../implementations/scenario-a-health-check/option-c-copilot-cli.md)
+- [Scenario B — Copilot CLI](../implementations/scenario-b-alert-triage/option-c-copilot-cli.md)
+- [Scenario C — Copilot CLI](../implementations/scenario-c-security-troubleshooting/option-c-copilot-cli.md)
+- [Scenario D — Copilot CLI](../implementations/scenario-d-compliance/option-c-copilot-cli.md)
+- [Scenario E — Copilot CLI](../implementations/scenario-e-patching/option-c-copilot-cli.md)
+- [Scenario F — Copilot CLI](../implementations/scenario-f-cmdb-sync/option-c-copilot-cli.md)
+- [Scenario G — Copilot CLI](../implementations/scenario-g-snapshot-cleanup/option-c-copilot-cli.md)
+
+### Via PowerShell Scripts (Deterministic Automation)
+Run the scripts in [scripts/](../../scripts/):
+```bash
+./scripts/demo-run-all.ps1
+```
+
+### Via Copilot CLI Programmatic Mode
+```bash
+copilot -p "Use the /wintel-health-check-investigation skill on all my Arc servers" --allow-all-tools
+```

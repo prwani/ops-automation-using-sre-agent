@@ -129,6 +129,22 @@ Seven PowerShell scripts in `scripts/` demonstrate each automation scenario end-
 | Patch compliance rate | TBD | ≥ 95% |
 | CMDB accuracy | TBD | ≥ 98% |
 
+## Testing
+
+See [TESTING.md](TESTING.md) for the quick-start guide.
+
+**Quick test (copy-paste):**
+```bash
+copilot -p "Check the health of all my Arc servers" --allow-all-tools
+```
+
+**Automation scripts (no AI):**
+```bash
+./scripts/demo-run-all.ps1
+```
+
+**Per-scenario guides:** [docs/implementations/](docs/implementations/)
+
 ## Documentation
 
 | Document | Description |
