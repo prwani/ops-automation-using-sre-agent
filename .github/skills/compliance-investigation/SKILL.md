@@ -1,23 +1,23 @@
 ---
 name: compliance-investigation
-description: Investigates non-compliant controls found by Microsoft Defender for Cloud AND Azure Policy, correlates findings across both sources, and prioritizes remediation. Use when asked about compliance, policy violations, CIS benchmarks, or regulatory standards.
+description: Investigates non-compliant controls found by Microsoft Defender for Cloud AND Azure Policy, correlates findings across both sources, and prioritizes remediation.
 ---
 
 # Compliance Investigation
 
 Execute these steps IN ORDER. Do not skip steps or explore the repo.
 
-## Environment
+## Scope
 
-- Subscription: `31adb513-7077-47bb-9567-8e9d2a462bcf`
-- Resource Group: `rg-arcbox-itpro`
-- Region: `swedencentral`
-- Log Analytics Workspace ID: `f98fca75-7479-45e5-bf0c-87b56a9f9e8c`
-- Windows servers: `ArcBox-Win2K22`, `ArcBox-Win2K25`, `ArcBox-SQL`
-- Linux servers: `Arcbox-Ubuntu-01`, `Arcbox-Ubuntu-02`
-- GLPI URL: `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
+This skill works across ALL subscriptions and resource groups in your tenant by default.
+
+- To check all compliance: just ask "check compliance posture"
+- To narrow scope: specify a resource group or subscription, e.g. "check compliance for subscription X" or "check policy compliance in rg-production"
+- The skill auto-discovers servers and Log Analytics workspaces — nothing is hardcoded
 
 ## Step 1 — Query Defender for Cloud compliance (1 command for all standards)
+
+This already works tenant-wide:
 
 ```shell
 az security regulatory-compliance-standards list --query "[].{Standard:name, State:state, PassedControls:passedControls, FailedControls:failedControls, SkippedControls:skippedControls}" -o table
@@ -31,26 +31,32 @@ az security regulatory-compliance-controls list --standard-name STANDARD_NAME --
 
 Replace `STANDARD_NAME` with the standard name from the previous output (e.g., `CIS-Microsoft-Azure-Foundations-Benchmark-v2.0.0`).
 
-## Step 2 — Query Azure Policy compliance (batched commands)
+## Step 2 — Query Azure Policy compliance (tenant-wide by default)
 
-Run these three commands to get the full policy picture — they cover summary, details, and assignments in one pass:
+If the user specified a resource group, add `--resource-group USER_RG`. If the user specified a subscription, add `--subscription USER_SUB`. Otherwise, omit scope flags to query the default subscription, or run per subscription for full tenant coverage.
 
-**Summary of non-compliant policies:**
+**Summary of non-compliant policies (default subscription):**
 
 ```shell
-az policy state summarize --resource-group rg-arcbox-itpro -o table
+az policy state summarize -o table
 ```
 
-**Non-compliant resources (1 query for all):**
+**Scoped to a specific subscription:**
 
 ```shell
-az policy state list --resource-group rg-arcbox-itpro --filter "complianceState eq 'NonCompliant'" --query "[].{Resource:resourceId, Policy:policyDefinitionName}" -o table
+az policy state summarize --subscription USER_SUB -o table
 ```
 
-**Active policy assignments:**
+**Non-compliant resources across the tenant via Resource Graph:**
 
 ```shell
-az policy assignment list --resource-group rg-arcbox-itpro --query "[].{Name:displayName, PolicyId:policyDefinitionId, Enforcement:enforcementMode}" -o table
+az graph query -q "policyresources | where type == 'microsoft.policyinsights/policystates' | where properties.complianceState == 'NonCompliant' | project resourceId=tostring(properties.resourceId), policyDefinition=tostring(properties.policyDefinitionName), resourceGroup, subscriptionId | order by subscriptionId, resourceGroup" --first 1000 -o table
+```
+
+**Active policy assignments (default subscription, or scoped):**
+
+```shell
+az policy assignment list --query "[].{Name:displayName, PolicyId:policyDefinitionId, Enforcement:enforcementMode}" -o table
 ```
 
 ## Step 3 — Correlate findings across both sources
@@ -69,16 +75,22 @@ Deduplicate: If the same issue appears in both Defender and Policy, count it onc
 
 ## Step 4 — Spot-check compliance on affected servers (only if needed)
 
-Only run this step for specific servers flagged in Steps 1–3. For each affected Windows server, run ONE combined diagnostic command that checks audit policy, firewall, and password policy together. Use `--async-execution true` so commands run in parallel across servers:
+First, discover the affected Arc-enrolled servers:
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compCheck --location swedencentral --async-execution true --script 'Write-Output "=== AUDIT POLICY ==="; auditpol /get /category:* | Select-String "No Auditing"; Write-Output "=== FIREWALL ==="; Get-NetFirewallProfile | Select-Object Name,Enabled | Format-Table -AutoSize; Write-Output "=== PASSWORD POLICY ==="; net accounts'
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
+```
+
+For each affected Windows server, run ONE combined diagnostic command using the server's actual resource group and location from discovery:
+
+```shell
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name compCheck --location SERVER_LOCATION --async-execution true --script 'Write-Output "=== AUDIT POLICY ==="; auditpol /get /category:* | Select-String "No Auditing"; Write-Output "=== FIREWALL ==="; Get-NetFirewallProfile | Select-Object Name,Enabled | Format-Table -AutoSize; Write-Output "=== PASSWORD POLICY ==="; net accounts'
 ```
 
 After dispatching commands for all affected servers, batch-read results:
 
 ```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name compCheck --query "instanceView.{state:executionState, output:output, error:error}" -o json
+az connectedmachine run-command show --resource-group SERVER_RG --machine-name SERVER_NAME --name compCheck --query "instanceView.{state:executionState, output:output, error:error}" -o json
 ```
 
 ## Step 5 — Classify and prioritize findings
@@ -111,18 +123,18 @@ Then list the top 10 findings by priority:
 
 ## Step 7 — Create GLPI tickets for P1 and P2 findings
 
-For each P1 or P2 finding (or group related findings into one ticket):
+For each P1 or P2 finding (or group related findings into one ticket).
 
-First, initialize a GLPI session:
+If GLPI is configured in your environment, initialize a session:
 
 ```shell
-curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession'
+curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'YOUR_GLPI_URL/apirest.php/initSession'
 ```
 
 Then create the ticket (replace SESSION_TOKEN with the value from initSession):
 
 ```shell
-curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[Compliance] SOURCE: CONTROL_NAME — N servers affected", "content": "Priority: P_LEVEL\nSource: Defender/Policy/Both\nAffected servers: SERVER_LIST\nFinding: DESCRIPTION\nRemediation: STEPS", "type": 1, "urgency": URGENCY_LEVEL, "priority": PRIORITY_LEVEL}}' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket'
+curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[Compliance] SOURCE: CONTROL_NAME — N servers affected", "content": "Priority: P_LEVEL\nSource: Defender/Policy/Both\nAffected servers: SERVER_LIST\nFinding: DESCRIPTION\nRemediation: STEPS", "type": 1, "urgency": URGENCY_LEVEL, "priority": PRIORITY_LEVEL}}' 'YOUR_GLPI_URL/apirest.php/Ticket'
 ```
 
 Priority mapping: P1 → urgency=5,priority=5 | P2 → urgency=4,priority=4 | P3 → urgency=3,priority=3

@@ -1,40 +1,67 @@
 ---
 name: vmware-bau-operations
-description: Performs Hyper-V BAU tasks including snapshot/checkpoint cleanup, resource monitoring, and VM health checks. Use when asked about VM snapshots, checkpoints, VM resource utilization, or VM health.
+description: Performs VMware/Hyper-V BAU tasks including snapshot cleanup, resource monitoring, and VM health checks.
 ---
 
 # Hyper-V BAU Operations
 
 Execute these steps IN ORDER. Do not skip steps or explore the repo.
 
-## Environment
+## Scope
 
-- Subscription: `31adb513-7077-47bb-9567-8e9d2a462bcf`
-- Resource Group: `rg-arcbox-itpro`
-- Region: `swedencentral`
-- Log Analytics Workspace ID: `f98fca75-7479-45e5-bf0c-87b56a9f9e8c`
-- Hyper-V Host: `ArcBox-Client` (this is an Azure VM, NOT an Arc machine — use `az vm run-command invoke`)
-- Arc Windows servers: `ArcBox-Win2K22`, `ArcBox-Win2K25`, `ArcBox-SQL`
-- Arc Linux servers: `Arcbox-Ubuntu-01`, `Arcbox-Ubuntu-02`
-- GLPI URL: `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
+This skill works across ALL Azure VMs and Arc-enrolled servers in your tenant by default.
 
-**IMPORTANT**: `ArcBox-Client` is the Hyper-V host and is an Azure VM. Always use `az vm run-command invoke` for it, NOT `az connectedmachine run-command create`.
+- To check all VMs: just ask "check VM health" or "clean up snapshots"
+- To narrow scope: specify a VM name, resource group, or subscription, e.g. "check snapshots on MyHyperVHost in rg-production"
+- The skill auto-discovers Hyper-V hosts, Arc servers, and Log Analytics workspaces — nothing is hardcoded
+
+**IMPORTANT**: Hyper-V hosts are Azure VMs — always use `az vm run-command invoke` for them, NOT `az connectedmachine run-command create`.
+
+## Step 1 — Discover Azure VMs (potential Hyper-V hosts)
+
+If the user specified a VM name, use that directly. Otherwise, discover Azure VMs in the tenant.
+
+If the user specified a resource group, add `| where resourceGroup =~ 'USER_RG'`. If the user specified a subscription, add `| where subscriptionId == 'USER_SUB'`.
+
+**All Azure VMs (default):**
+
+```shell
+az graph query -q "Resources | where type == 'microsoft.compute/virtualmachines' | project name, resourceGroup, subscriptionId, location, powerState=tostring(properties.extended.instanceView.powerState.displayStatus) | order by name" --first 1000 -o table
+```
+
+If the user specified a specific Hyper-V host by name, use it directly in the commands below. Otherwise, ask the user which VM is the Hyper-V host.
+
+## Step 2 — Discover Arc-enrolled servers
+
+```shell
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
+```
+
+Record the server names, resource groups, and locations for use in health checks below.
+
+## Step 3 — Discover Log Analytics workspace
+
+```shell
+az graph query -q "Resources | where type == 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId, workspaceId=tostring(properties.customerId), location" --first 1000 -o table
+```
+
+Use the workspace ID (`WORKSPACE_ID`) from above in KQL queries below. If multiple workspaces exist, query each until you find one with Perf data for the target servers.
 
 ## Task 1 — Snapshot/Checkpoint Cleanup
 
-### Step 1 — List all checkpoints with age classification
+### Step 4 — List all checkpoints with age classification
 
-ONE command to list all checkpoints and flag them by age:
+Replace `HYPERV_RG` and `HYPERV_HOST` with the Hyper-V host's resource group and name from Step 1:
 
 ```shell
-az vm run-command invoke --resource-group rg-arcbox-itpro --name ArcBox-Client --command-id RunPowerShellScript --scripts 'Get-VM | ForEach-Object { $vm = $_; Get-VMCheckpoint -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object { $age = [int]((Get-Date) - $_.CreationTime).TotalDays; $action = if ($age -gt 30) { "CRITICAL-DELETE" } elseif ($age -ge 7) { "WARNING-REVIEW" } else { "KEEP" }; [PSCustomObject]@{ VMName = $vm.Name; CheckpointName = $_.Name; CreationTime = $_.CreationTime.ToString("yyyy-MM-dd HH:mm:ss"); AgeDays = $age; Action = $action } } } | Format-Table -AutoSize' -o json
+az vm run-command invoke --resource-group HYPERV_RG --name HYPERV_HOST --command-id RunPowerShellScript --scripts 'Get-VM | ForEach-Object { $vm = $_; Get-VMCheckpoint -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object { $age = [int]((Get-Date) - $_.CreationTime).TotalDays; $action = if ($age -gt 30) { "CRITICAL-DELETE" } elseif ($age -ge 7) { "WARNING-REVIEW" } else { "KEEP" }; [PSCustomObject]@{ VMName = $vm.Name; CheckpointName = $_.Name; CreationTime = $_.CreationTime.ToString("yyyy-MM-dd HH:mm:ss"); AgeDays = $age; Action = $action } } } | Format-Table -AutoSize' -o json
 ```
 
 The output is in `.value[0].message`. Parse the stdout section.
 
-### Step 2 — Present cleanup plan
+### Step 5 — Present cleanup plan
 
-Show the user a table built from the Step 1 output:
+Show the user a table built from the Step 4 output:
 
 | VM Name | Checkpoint Name | Created | Age (days) | Action |
 |---------|----------------|---------|------------|--------|
@@ -47,31 +74,31 @@ Rules:
 
 Ask the user for confirmation before proceeding with any deletions.
 
-### Step 3 — Delete approved checkpoints
+### Step 6 — Delete approved checkpoints
 
 For each checkpoint the user approves for deletion:
 
 ```shell
-az vm run-command invoke --resource-group rg-arcbox-itpro --name ArcBox-Client --command-id RunPowerShellScript --scripts 'Remove-VMCheckpoint -VMName "VM_NAME" -Name "CHECKPOINT_NAME" -Confirm:$false; Write-Output "Deleted: VM_NAME / CHECKPOINT_NAME"' -o json
+az vm run-command invoke --resource-group HYPERV_RG --name HYPERV_HOST --command-id RunPowerShellScript --scripts 'Remove-VMCheckpoint -VMName "VM_NAME" -Name "CHECKPOINT_NAME" -Confirm:$false; Write-Output "Deleted: VM_NAME / CHECKPOINT_NAME"' -o json
 ```
 
 After all deletions, verify with one command:
 
 ```shell
-az vm run-command invoke --resource-group rg-arcbox-itpro --name ArcBox-Client --command-id RunPowerShellScript --scripts 'Get-VM | ForEach-Object { Get-VMCheckpoint -VMName $_.Name -ErrorAction SilentlyContinue } | Select-Object VMName,Name,CreationTime | Format-Table -AutoSize' -o json
+az vm run-command invoke --resource-group HYPERV_RG --name HYPERV_HOST --command-id RunPowerShellScript --scripts 'Get-VM | ForEach-Object { Get-VMCheckpoint -VMName $_.Name -ErrorAction SilentlyContinue } | Select-Object VMName,Name,CreationTime | Format-Table -AutoSize' -o json
 ```
 
 ## Task 2 — VM Resource Utilization Report
 
-### Step 4 — Query CPU and memory utilization (last 7 days)
+### Step 7 — Query CPU and memory utilization (last 7 days)
 
-ONE Log Analytics query for both CPU and memory:
+ONE Log Analytics query for both CPU and memory. Replace `WORKSPACE_ID` from Step 3:
 
 ```shell
-az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query "Perf | where TimeGenerated > ago(7d) | where (ObjectName == 'Processor' and CounterName == '% Processor Time' and InstanceName == '_Total') or (ObjectName == 'Memory' and CounterName == '% Committed Bytes In Use') | summarize AvgValue=round(avg(CounterValue),1), MaxValue=round(max(CounterValue),1), P95Value=round(percentile(CounterValue,95),1) by Computer, ObjectName | order by Computer asc, ObjectName asc" -o table
+az monitor log-analytics query --workspace WORKSPACE_ID --analytics-query "Perf | where TimeGenerated > ago(7d) | where (ObjectName == 'Processor' and CounterName == '% Processor Time' and InstanceName == '_Total') or (ObjectName == 'Memory' and CounterName == '% Committed Bytes In Use') | summarize AvgValue=round(avg(CounterValue),1), MaxValue=round(max(CounterValue),1), P95Value=round(percentile(CounterValue,95),1) by Computer, ObjectName | order by Computer asc, ObjectName asc" -o table
 ```
 
-### Step 5 — Evaluate resource thresholds
+### Step 8 — Evaluate resource thresholds
 
 | Metric | Threshold | Status |
 |--------|-----------|--------|
@@ -80,78 +107,78 @@ az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c 
 | Avg Memory > 80% (7 day) | Memory upgrade assessment | WARNING |
 | Avg Memory > 90% (7 day) | Immediate memory action | CRITICAL |
 
-Present results as:
+Present results as a table with one row per discovered server:
 
 | Server | Avg CPU | Max CPU | Avg Mem | Max Mem | CPU Status | Mem Status |
 |--------|---------|---------|---------|---------|------------|------------|
-| _name_ | _pct_ | _pct_ | _pct_ | _pct_ | OK/WARN/CRIT | OK/WARN/CRIT |
 
 ## Task 3 — VM Health Check
 
-### Step 6 — Check Arc connectivity and Defender status for all servers
+### Step 9 — Check Arc connectivity and Defender status for all servers
 
-ONE command for Arc connectivity:
+ONE tenant-wide query for Arc connectivity (uses servers from Step 2):
 
 ```shell
-az connectedmachine list -g rg-arcbox-itpro --query "[].{Name:name, Status:status, LastStatusChange:lastStatusChange, OS:osName}" -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), lastStatusChange=tostring(properties.lastStatusChange), os=tostring(properties.osName) | order by name" --first 1000 -o table
 ```
 
-ONE command for Defender (MDE) extension status across all Windows Arc servers:
+ONE tenant-wide query for Defender (MDE) extension status:
 
 ```shell
-az graph query -q "extendedlocationresources | where type == 'microsoft.hybridcompute/machines/extensions' | where resourceGroup == 'rg-arcbox-itpro' | where properties.type contains 'MDE' | extend machineName = tostring(split(id, '/')[8]) | extend provisioningState = tostring(properties.provisioningState) | project machineName, provisioningState" --subscriptions 31adb513-7077-47bb-9567-8e9d2a462bcf -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines/extensions' | where properties.type contains 'MDE' or name contains 'Defender' | extend machineName = tostring(split(id, '/')[8]), rg = resourceGroup | extend provisioningState = tostring(properties.provisioningState) | project machineName, rg, provisioningState" --first 1000 -o table
 ```
 
-If the Resource Graph query returns no results for MDE extensions, fall back to checking each server individually:
+If the Resource Graph query returns no results for MDE extensions, fall back to checking each server individually using names from Step 2:
 
 ```shell
-az connectedmachine extension list --machine-name SERVER_NAME --resource-group rg-arcbox-itpro --query "[?contains(type,'MDE')].{Name:name, Status:provisioningState}" -o table
+az connectedmachine extension list --machine-name SERVER_NAME --resource-group SERVER_RG --query "[?contains(type,'MDE')].{Name:name, Status:provisioningState}" -o table
 ```
 
 Any server with Status != Connected → CRITICAL. Missing MDE extension or Status != Succeeded → WARNING.
 
-### Step 7 — Check Hyper-V VM power state
+### Step 10 — Check Hyper-V VM power state
+
+Replace `HYPERV_RG` and `HYPERV_HOST` with actual values from Step 1:
 
 ```shell
-az vm run-command invoke --resource-group rg-arcbox-itpro --name ArcBox-Client --command-id RunPowerShellScript --scripts 'Get-VM | Select-Object Name,State,CPUUsage,@{N="MemoryAssignedGB";E={[math]::Round($_.MemoryAssigned/1GB,1)}},Uptime,Status | Format-Table -AutoSize' -o json
+az vm run-command invoke --resource-group HYPERV_RG --name HYPERV_HOST --command-id RunPowerShellScript --scripts 'Get-VM | Select-Object Name,State,CPUUsage,@{N="MemoryAssignedGB";E={[math]::Round($_.MemoryAssigned/1GB,1)}},Uptime,Status | Format-Table -AutoSize' -o json
 ```
 
 Any VM with State != Running → WARNING.
 
-### Step 8 — Check pending patches
+### Step 11 — Check pending patches
+
+Tenant-wide query (no hardcoded scope):
 
 ```shell
-az graph query -q "patchassessmentresources | where type == 'microsoft.hybridcompute/machines/patchassessmentresults' | where resourceGroup == 'rg-arcbox-itpro' | extend machineName = tostring(split(id, '/')[8]) | extend criticalCount = toint(properties.availablePatchCountByClassification.critical) | extend securityCount = toint(properties.availablePatchCountByClassification.security) | extend totalCount = toint(properties.availablePatchCountByClassification.total) | project machineName, criticalCount, securityCount, totalCount" --subscriptions 31adb513-7077-47bb-9567-8e9d2a462bcf -o table
+az graph query -q "patchassessmentresources | where type == 'microsoft.hybridcompute/machines/patchassessmentresults' | extend machineName = tostring(split(id, '/')[8]) | extend criticalCount = toint(properties.availablePatchCountByClassification.critical) | extend securityCount = toint(properties.availablePatchCountByClassification.security) | extend totalCount = toint(properties.availablePatchCountByClassification.total) | project machineName, resourceGroup, subscriptionId, criticalCount, securityCount, totalCount" --first 1000 -o table
 ```
 
 Critical patches pending > 0 → WARNING.
 
-### Step 9 — VM health summary
+### Step 12 — VM health summary
 
-| Server | Power State | Arc Status | Defender | Pending Patches | Overall |
-|--------|------------|------------|----------|-----------------|---------|
-| ArcBox-Win2K22 | Running/Off | Connected/Disconnected | OK/WARN | _count_ | OK / WARNING / CRITICAL |
-| ArcBox-Win2K25 | ... | ... | ... | ... | ... |
-| ArcBox-SQL | ... | ... | ... | ... | ... |
-| Arcbox-Ubuntu-01 | ... | ... | N/A | ... | ... |
-| Arcbox-Ubuntu-02 | ... | ... | N/A | ... | ... |
+Present a table with one row per discovered server:
 
-## Step 10 — Create GLPI ticket if CRITICAL findings
+| Server | Resource Group | Power State | Arc Status | Defender | Pending Patches | Overall |
+|--------|---------------|------------|------------|----------|-----------------|---------|
+
+## Step 13 — Create GLPI ticket if CRITICAL findings
 
 Only create a ticket for CRITICAL findings (old snapshots >30 days, sustained high resource usage, disconnected servers).
 
 If no CRITICAL findings → skip this step, report summary only.
 
-Get a GLPI session:
+If GLPI is configured in your environment, initialize a session:
 
 ```shell
-curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession'
+curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'YOUR_GLPI_URL/apirest.php/initSession'
 ```
 
 Then create the ticket (replace SESSION_TOKEN with the value from initSession):
 
 ```shell
-curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[BAU] ISSUE_SUMMARY", "content": "DETAILED_FINDINGS", "type": 1, "urgency": 4, "priority": 4}}' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket'
+curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[BAU] ISSUE_SUMMARY", "content": "DETAILED_FINDINGS", "type": 1, "urgency": 4, "priority": 4}}' 'YOUR_GLPI_URL/apirest.php/Ticket'
 ```
 
 If GLPI credentials are not available, report the findings and recommend the user create a ticket manually.

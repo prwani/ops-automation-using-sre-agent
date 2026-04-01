@@ -1,53 +1,69 @@
 ---
 name: security-agent-troubleshooting
-description: Diagnoses and remediates Microsoft Defender for Endpoint agent issues on Windows servers. Use when asked about Defender health, MDE agent, security agent, or antivirus status.
+description: Diagnoses and remediates Microsoft Defender for Endpoint agent issues on Windows servers.
 ---
 
 # Security Agent Troubleshooting
 
 Execute these steps IN ORDER. Do not skip steps or explore the repo.
 
-## Environment
+## Scope
 
-- Subscription: `31adb513-7077-47bb-9567-8e9d2a462bcf`
-- Resource Group: `rg-arcbox-itpro`
-- Region: `swedencentral`
-- Windows servers: `ArcBox-Win2K22`, `ArcBox-Win2K25`, `ArcBox-SQL`
-- GLPI URL: `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
+This skill works across ALL Arc-enrolled Windows servers in your tenant by default.
 
-## Step 1 — List Arc-connected servers (1 command)
+- To check all servers: just ask "check Defender health on all servers"
+- To narrow scope: specify a resource group or subscription, e.g. "check MDE agent in rg-production"
+- The skill auto-discovers servers and Log Analytics workspaces — nothing is hardcoded
+
+## Step 1 — Discover Arc-enrolled Windows servers
+
+If the user specified a resource group, add `| where resourceGroup =~ 'USER_RG'`. If the user specified a subscription, add `| where subscriptionId == 'USER_SUB'`.
+
+**All servers (default):**
 
 ```shell
-az connectedmachine list --resource-group rg-arcbox-itpro --query "[].{Name:name, Status:status, OS:osName, LastSeen:lastStatusChange}" -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | where properties.osName has 'Windows' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
 ```
 
-Confirm all three Windows servers appear and are Connected. If any server shows Disconnected, note it — remaining steps will not work for that machine.
-
-## Step 2 — Check Defender extension status for ALL servers
-
-Run once per server (lightweight metadata query, no remote execution):
+**Scoped to a resource group:**
 
 ```shell
-az connectedmachine extension list --machine-name ArcBox-Win2K22 -g rg-arcbox-itpro --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines' | where properties.osName has 'Windows' | where resourceGroup =~ 'USER_RG' | project name, resourceGroup, subscriptionId, status=tostring(properties.status), os=tostring(properties.osName), location | order by name" --first 1000 -o table
 ```
 
-```shell
-az connectedmachine extension list --machine-name ArcBox-Win2K25 -g rg-arcbox-itpro --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
-```
+Record the server names, resource groups, and locations from the output. Confirm servers are Connected. If any server shows Disconnected, note it — remaining steps will not work for that machine.
+
+## Step 2 — Check Defender extension status for ALL discovered servers
+
+Use Resource Graph for a single tenant-wide query of MDE/Defender extensions:
 
 ```shell
-az connectedmachine extension list --machine-name ArcBox-SQL -g rg-arcbox-itpro --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
+az graph query -q "Resources | where type == 'microsoft.hybridcompute/machines/extensions' | where properties.type contains 'MDE' or name contains 'Defender' | extend machineName = tostring(split(id, '/')[8]), rg = resourceGroup | extend provisioningState = tostring(properties.provisioningState), version = tostring(properties.typeHandlerVersion) | project machineName, rg, provisioningState, version" --first 1000 -o table
+```
+
+If the Resource Graph query returns no results, fall back to checking each server individually using the names from Step 1:
+
+```shell
+az connectedmachine extension list --machine-name SERVER_NAME --resource-group SERVER_RG --query "[?contains(name,'MDE') || contains(name,'Defender')].{name:name,state:provisioningState,version:typeHandlerVersion}" -o table
 ```
 
 If the MDE extension is missing or state != Succeeded on any server, note it as CRITICAL.
 
-## Step 3 — Check Defender health via Log Analytics (ONE query for ALL servers)
+## Step 3 — Discover Log Analytics workspace and check heartbeat
 
-Query the Log Analytics workspace for heartbeat and security baseline data across all servers in a single call:
+Find all Log Analytics workspaces in the tenant:
 
 ```shell
-az monitor log-analytics query --workspace f98fca75-7479-45e5-bf0c-87b56a9f9e8c --analytics-query 'Heartbeat | where Computer in~ ("ArcBox-Win2K22","ArcBox-Win2K25","ArcBox-SQL") | summarize LastHeartbeat=max(TimeGenerated) by Computer | extend StaleMinutes=datetime_diff("minute",now(),LastHeartbeat)' -o table
+az graph query -q "Resources | where type == 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId, workspaceId=tostring(properties.customerId), location" --first 1000 -o table
 ```
+
+Use the discovered workspace ID (`WORKSPACE_ID`) below. Build the `in~()` list dynamically from server names in Step 1:
+
+```shell
+az monitor log-analytics query --workspace WORKSPACE_ID --analytics-query 'Heartbeat | where Computer in~ ("SERVER1","SERVER2","SERVER3") | summarize LastHeartbeat=max(TimeGenerated) by Computer | extend StaleMinutes=datetime_diff("minute",now(),LastHeartbeat)' -o table
+```
+
+If multiple workspaces exist, query each until you find the one with heartbeat data for the target servers.
 
 If any server shows StaleMinutes > 30, flag it as WARNING. If StaleMinutes > 120, flag as CRITICAL.
 
@@ -55,16 +71,16 @@ If any server shows StaleMinutes > 30, flag it as WARNING. If StaleMinutes > 120
 
 ## Step 4 — Diagnose unhealthy servers via Arc run-command
 
-For each server flagged in Steps 2–3, run ONE combined diagnostic command that checks services, Defender status, event logs, AND connectivity together. Use `--async-execution true` so commands run in parallel:
+For each server flagged in Steps 2–3, run ONE combined diagnostic command. Use the server's resource group and location from Step 1:
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeDiag --location swedencentral --async-execution true --script 'Write-Output "=== SERVICES ==="; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize; Write-Output "=== DEFENDER STATUS ==="; Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List; Write-Output "=== RECENT EVENTS ==="; Get-WinEvent -LogName "Microsoft-Windows-Windows Defender/Operational" -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-Table -Wrap; Write-Output "=== CONNECTIVITY ==="; Test-NetConnection winatp-gw-weu.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded; Test-NetConnection us-v20.events.data.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded'
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeDiag --location SERVER_LOCATION --async-execution true --script 'Write-Output "=== SERVICES ==="; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize; Write-Output "=== DEFENDER STATUS ==="; Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List; Write-Output "=== RECENT EVENTS ==="; Get-WinEvent -LogName "Microsoft-Windows-Windows Defender/Operational" -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-Table -Wrap; Write-Output "=== CONNECTIVITY ==="; Test-NetConnection winatp-gw-weu.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded; Test-NetConnection us-v20.events.data.microsoft.com -Port 443 -WarningAction SilentlyContinue | Select-Object ComputerName,TcpTestSucceeded'
 ```
 
 After dispatching commands for all unhealthy servers, batch-read results:
 
 ```shell
-az connectedmachine run-command show --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeDiag --query "instanceView.{state:executionState, output:output, error:error}" -o json
+az connectedmachine run-command show --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeDiag --query "instanceView.{state:executionState, output:output, error:error}" -o json
 ```
 
 Evaluate each section of the output:
@@ -84,26 +100,23 @@ Skip this step entirely if Step 4 found no issues or only connectivity failures 
 **Service stopped → Restart it:**
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeRestart --location swedencentral --async-execution true --script 'Restart-Service WinDefend -Force -ErrorAction SilentlyContinue; Start-Service Sense -ErrorAction SilentlyContinue; Start-Service MdCoreSvc -ErrorAction SilentlyContinue; Start-Sleep -Seconds 10; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status | Format-Table -AutoSize'
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeRestart --location SERVER_LOCATION --async-execution true --script 'Restart-Service WinDefend -Force -ErrorAction SilentlyContinue; Start-Service Sense -ErrorAction SilentlyContinue; Start-Service MdCoreSvc -ErrorAction SilentlyContinue; Start-Sleep -Seconds 10; Get-Service WinDefend,Sense,MdCoreSvc -ErrorAction SilentlyContinue | Select-Object Name,Status | Format-Table -AutoSize'
 ```
 
 **Definitions stale → Force update:**
 
 ```shell
-az connectedmachine run-command create --resource-group rg-arcbox-itpro --machine-name SERVER_NAME --name mdeUpdate --location swedencentral --async-execution true --script 'Update-MpSignature -UpdateSource MicrosoftUpdateServer -ErrorAction SilentlyContinue; Start-Sleep -Seconds 30; Get-MpComputerStatus | Select-Object AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List'
+az connectedmachine run-command create --resource-group SERVER_RG --machine-name SERVER_NAME --name mdeUpdate --location SERVER_LOCATION --async-execution true --script 'Update-MpSignature -UpdateSource MicrosoftUpdateServer -ErrorAction SilentlyContinue; Start-Sleep -Seconds 30; Get-MpComputerStatus | Select-Object AntivirusSignatureAge,AntivirusSignatureLastUpdated | Format-List'
 ```
 
 After remediation, re-read the run-command results to verify the fix took effect. Do NOT attempt remediation for connectivity issues — those require firewall changes.
 
 ## Step 6 — Summarize findings
 
-Present results as a table:
+Present results as a table with one row per discovered server:
 
-| Server | WinDefend | Sense | MdCoreSvc | Definitions Age | RealTime | Connectivity | Status |
-|--------|-----------|-------|-----------|-----------------|----------|--------------|--------|
-| ArcBox-Win2K22 | Running/Stopped | Running/Stopped | Running/Stopped | _days_ | True/False | OK/FAIL | OK / WARNING / CRITICAL |
-| ArcBox-Win2K25 | ... | ... | ... | ... | ... | ... | ... |
-| ArcBox-SQL | ... | ... | ... | ... | ... | ... | ... |
+| Server | Resource Group | WinDefend | Sense | MdCoreSvc | Definitions Age | RealTime | Connectivity | Status |
+|--------|---------------|-----------|-------|-----------|-----------------|----------|--------------|--------|
 
 ## Step 7 — Create GLPI ticket if escalation needed
 
@@ -113,16 +126,16 @@ Create a ticket only if:
 - Definitions won't update
 - Real-time protection cannot be re-enabled
 
-First, initialize a GLPI session:
+If GLPI is configured in your environment, initialize a session:
 
 ```shell
-curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession'
+curl -s -X GET -H 'Content-Type: application/json' -H 'Authorization: user_token YOUR_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' 'YOUR_GLPI_URL/apirest.php/initSession'
 ```
 
 Then create the ticket (replace SESSION_TOKEN with the value from initSession):
 
 ```shell
-curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[Security] Defender agent issue: SERVER_NAME - ISSUE_SUMMARY", "content": "DETAILED_FINDINGS_AND_REMEDIATION_ATTEMPTED", "type": 1, "urgency": 4, "priority": 4}}' 'http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/Ticket'
+curl -s -X POST -H 'Content-Type: application/json' -H 'Session-Token: SESSION_TOKEN' -H 'App-Token: YOUR_APP_TOKEN' -d '{"input": {"name": "[Security] Defender agent issue: SERVER_NAME - ISSUE_SUMMARY", "content": "DETAILED_FINDINGS_AND_REMEDIATION_ATTEMPTED", "type": 1, "urgency": 4, "priority": 4}}' 'YOUR_GLPI_URL/apirest.php/Ticket'
 ```
 
 If GLPI credentials are not available, report the findings and recommend the user create a ticket manually.
