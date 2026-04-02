@@ -63,14 +63,15 @@ copilot -p "Use the /vmware-bau-operations skill. Find all Azure VMs that host H
 
 ### Skill 6: Ticket-Driven Remediation (requires GLPI)
 
-**Prerequisite:** Seed sample tickets first:
+**Prerequisite:** Seed sample tickets first (or verify they exist):
 ```powershell
-.\scripts\seed-glpi-tickets.ps1 -ClientId "YOUR_CLIENT_ID" -ClientSecret "YOUR_SECRET" -Password "YOUR_PASSWORD"
+# Check GLPI has open tickets — if empty, create them:
+curl.exe -s -H "Content-Type: application/json" -H "Authorization: Basic Z2xwaTpnbHBp" "http://glpi-opsauto-demo.swedencentral.azurecontainer.io/apirest.php/initSession"
 ```
 
 Then invoke the skill:
 ```bash
-copilot -p "Use the /ticket-driven-remediation skill. Connect to GLPI at http://glpi-opsauto-demo.swedencentral.azurecontainer.io using client_id=YOUR_CLIENT_ID, client_secret=YOUR_CLIENT_SECRET, username=glpi, password=YOUR_PASSWORD. Read all open tickets, investigate each one using Azure Arc and Defender for Cloud, update each ticket with your findings, and mark resolved tickets as Solved." --allow-all-tools
+copilot -p "Use the /ticket-driven-remediation skill. Connect to GLPI at http://glpi-opsauto-demo.swedencentral.azurecontainer.io with username=glpi, password=glpi. Read all open tickets, investigate each one using Azure Arc and Defender for Cloud, update each ticket with your findings, and mark resolved tickets as Solved." --allow-all-tools
 ```
 
 ## Automation Scripts (No AI — deterministic)
