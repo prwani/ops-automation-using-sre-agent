@@ -44,11 +44,9 @@ Tier 2: AI Agents — Incident response, alert triage, security diagnostics,
   │      compliance analysis, patch risk, trend detection, ticket remediation
   │      Skills (AgentSkills.io) + Tools (az CLI, GLPI REST, scripts)
   │
-  │      Delivery options (same skills work on all):
+  │      Delivery options (same skills work on both):
   │      ├── Azure SRE Agent   — SaaS, production incident management
-  │      ├── GitHub Copilot CLI — Terminal-native, lowest barrier to entry
-  │      ├── Agent Framework    — Self-hosted, full customisation
-  │      └── Foundry Agent      — SaaS, managed hosting
+  │      └── GitHub Copilot CLI — Terminal-native, lowest barrier to entry
   │
 Tier 1: PowerShell Scripts — Deterministic automation (the workhorse)
          Health checks, compliance pulls, CMDB sync, patching, VMware BAU
@@ -98,7 +96,7 @@ sre-skills/
     └── SKILL.md          # ITSM closed-loop: read → classify → investigate → resolve
 ```
 
-Because AgentSkills.io is an open standard, **these same 6 skills run unchanged on Azure SRE Agent, GitHub Copilot CLI, Agent Framework, and Foundry Agent Service.** Write once, deploy to any agent platform.
+Because AgentSkills.io is an open standard, **these same 6 skills run unchanged on both Azure SRE Agent and GitHub Copilot CLI.** Write once, deploy to either platform.
 
 Here's what the health check skill looks like (abbreviated):
 
@@ -143,7 +141,7 @@ For the full skills inventory and custom tools, see [sre-skills.md](sre-skills.m
 
 ## Two Delivery Options: SRE Agent vs. Copilot CLI
 
-We evaluated four AI platforms, but two stood out for low-code/no-code delivery:
+We evaluated multiple AI platforms. Two stood out for low-code/no-code delivery:
 
 | Dimension | Azure SRE Agent | GitHub Copilot CLI |
 |---|---|---|
@@ -157,8 +155,6 @@ We evaluated four AI platforms, but two stood out for low-code/no-code delivery:
 | **Custom code** | None (portal + SKILL.md) | None (CLI + SKILL.md) |
 
 **SRE Agent** is the production choice — it runs continuously, triggers from alerts, and accumulates memory. **Copilot CLI** is the fastest path to a working demo — an engineer can run `copilot -p "investigate health on all my Arc servers" --allow-all-tools` and see results in 60 seconds. Both use the same 6 skills.
-
-For the two pro-code options (Agent Framework, Foundry Agent Service), see [ai-tier-options.md](ai-tier-options.md).
 
 ## Seeing It In Action: 8 Demo Scenarios
 
@@ -232,7 +228,7 @@ For full setup instructions, see [demo-environment.md](demo-environment.md).
 
 **SOPs → Skills is the killer pattern.** Most teams already have procedures — they're just in wikis, runbooks, or (worst case) someone's head. The hardest part isn't building the skill; it's getting the SOP documented. Once it's written down, converting it to a SKILL.md with YAML frontmatter and tool references is straightforward. And because AgentSkills.io is an open standard, the same skill works across SRE Agent, Copilot CLI, and any future agent platform.
 
-**Skills are portable — write once, run anywhere.** We wrote 6 skills and tested them on GitHub Copilot CLI (fast iteration, immediate feedback in the terminal). The same SKILL.md files can be uploaded to Azure SRE Agent without modification. This decouples your operational knowledge from any single AI platform.
+**Skills are portable — write once, run on both platforms.** We wrote 6 skills and tested them on GitHub Copilot CLI (fast iteration, immediate feedback in the terminal). The same SKILL.md files can be uploaded to Azure SRE Agent without modification. This decouples your operational knowledge from the delivery platform.
 
 **The closed-loop ITSM pattern is the most impressive demo.** When stakeholders see a ticket get created, investigated, annotated with findings, and auto-resolved — all without human intervention — it clicks. The ticket-driven remediation skill (Scenario H) combines everything: ITSM API integration, Azure investigation, natural language understanding, and structured output. It's the scenario that sells the vision.
 
@@ -248,7 +244,7 @@ The full implementation is open source:
 
 - **GitHub repo:** [ops-automation-using-sre-agent](https://github.com/prwani/ops-automation-using-sre-agent)
 - **Start here:** [architecture.md](architecture.md) for the system design, [demo-environment.md](demo-environment.md) for the sandbox setup, [TESTING.md](../TESTING.md) for quick validation
-- **AI tier comparison:** [ai-tier-options.md](ai-tier-options.md) — SRE Agent vs. Copilot CLI vs. Agent Framework vs. Foundry
+- **AI tier comparison:** [ai-tier-options.md](ai-tier-options.md) — SRE Agent vs. Copilot CLI
 - **Skills directory:** [sre-skills.md](sre-skills.md) — all 6 skills with tool inventories
 - **SRE Agent portal:** [https://sre.azure.com](https://sre.azure.com)
 - **Agent Skills resources:** [AgentSkills.io](https://agentskills.io/specification) (open standard), [Azure Skills Directory](https://github.com/microsoft/azure-skills/), [Anthropic Skills Gallery](https://github.com/anthropics/skills)
