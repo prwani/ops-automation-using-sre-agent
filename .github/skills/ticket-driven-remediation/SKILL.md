@@ -16,27 +16,44 @@ Before starting, ask the user for GLPI connection details if not already known:
 - **GLPI_URL** — e.g. `http://glpi-opsauto-demo.swedencentral.azurecontainer.io`
 - **GLPI_USERNAME** — default `glpi`
 - **GLPI_PASSWORD** — admin password (default `glpi`)
+- *(Optional)* **GLPI_CLIENT_ID** and **GLPI_CLIENT_SECRET** — for OAuth2 auth
 
 If the user provides the URL and credentials in their prompt, use those directly. Otherwise, ask once and reuse for all subsequent calls.
 
-## Step 1 — Authenticate to GLPI (Legacy REST API)
+## Step 1 — Authenticate to GLPI
 
-Get a session token using HTTP Basic authentication. Encode `username:password` as Base64:
+Try **OAuth2** first. If it fails (HTTP 500 or connection error), fall back to the **legacy REST API**.
+
+### Option A: OAuth2 (preferred)
+
+```shell
+curl.exe -s -X POST -d "grant_type=password&client_id=CLIENT_ID&client_secret=CLIENT_SECRET&username=USERNAME&password=PASSWORD&scope=api" "GLPI_URL/api.php/token"
+```
+
+If successful, the response contains `access_token`. Use `Authorization: Bearer TOKEN` for all subsequent calls. The ticket endpoint is `GLPI_URL/api.php/v2.2/Assistance/Ticket`.
+
+### Option B: Legacy REST API (fallback)
+
+If OAuth2 fails or no client_id/secret were provided, use HTTP Basic auth. Encode `username:password` as Base64 (e.g. `glpi:glpi` → `Z2xwaTpnbHBp`):
 
 ```shell
 curl.exe -s -H "Content-Type: application/json" -H "Authorization: Basic BASE64_CREDENTIALS" "GLPI_URL/apirest.php/initSession"
 ```
 
-Where `BASE64_CREDENTIALS` is the Base64 encoding of `username:password`. For example, `glpi:glpi` encodes to `Z2xwaTpnbHBp`.
+Extract the `session_token` from the JSON response. Use `Session-Token: TOKEN` for all subsequent calls. The ticket endpoint is `GLPI_URL/apirest.php/Ticket`.
 
-Extract the `session_token` from the JSON response. Use it as `Session-Token: TOKEN` in all subsequent GLPI API calls.
-
-If authentication fails, report the error and stop.
+If **both** methods fail, report the error and stop.
 
 ## Step 2 — List open tickets
 
-Retrieve all tickets from GLPI using the legacy REST API:
+Retrieve all tickets from GLPI. Use the endpoint matching your auth method:
 
+**OAuth2:**
+```shell
+curl.exe -s -H "Authorization: Bearer TOKEN" "GLPI_URL/api.php/v2.2/Assistance/Ticket"
+```
+
+**Legacy API:**
 ```shell
 curl.exe -s -H "Session-Token: TOKEN" -H "Content-Type: application/json" "GLPI_URL/apirest.php/Ticket"
 ```
@@ -86,6 +103,12 @@ The ticket mentions a server with stale or incorrect CMDB data. The agent should
 
 3. **Query GLPI CMDB** for the same server:
 
+**OAuth2:**
+```shell
+curl.exe -s -H "Authorization: Bearer TOKEN" "GLPI_URL/api.php/v2.2/Assets/Computer"
+```
+
+**Legacy API:**
 ```shell
 curl.exe -s -H "Session-Token: TOKEN" -H "Content-Type: application/json" "GLPI_URL/apirest.php/Computer"
 ```
@@ -94,8 +117,14 @@ Find the matching computer record by name. Compare the Azure Arc data with the G
 
 4. **Identify discrepancies** — report what differs (OS name, OS version, status, serial, comment).
 
-5. **Update the GLPI record** with corrected data. Use PUT to update the computer:
+5. **Update the GLPI record** with corrected data:
 
+**OAuth2:**
+```shell
+curl.exe -s -X PATCH -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d "{\"comment\": \"UPDATED_COMMENT\"}" "GLPI_URL/api.php/v2.2/Assets/Computer/COMPUTER_ID"
+```
+
+**Legacy API:**
 ```shell
 curl.exe -s -X PUT -H "Session-Token: TOKEN" -H "Content-Type: application/json" -d "{\"input\": {\"comment\": \"UPDATED_COMMENT\"}}" "GLPI_URL/apirest.php/Computer/COMPUTER_ID"
 ```
@@ -180,8 +209,14 @@ az graph query -q "patchassessmentresources | where type =~ 'microsoft.hybridcom
 
 ## Step 5 — Update each ticket with findings
 
-For each ticket processed, add the investigation findings as a **followup** on the ticket. Use the GLPI ITILFollowup endpoint:
+For each ticket processed, add the investigation findings as a **followup** on the ticket:
 
+**OAuth2:**
+```shell
+curl.exe -s -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d "{\"content\": \"FINDINGS_TEXT\"}" "GLPI_URL/api.php/v2.2/Assistance/Ticket/TICKET_ID/ITILFollowup"
+```
+
+**Legacy API:**
 ```shell
 curl.exe -s -X POST -H "Session-Token: TOKEN" -H "Content-Type: application/json" -d "{\"input\": {\"itemtype\": \"Ticket\", \"items_id\": TICKET_ID, \"content\": \"FINDINGS_TEXT\"}}" "GLPI_URL/apirest.php/ITILFollowup"
 ```
@@ -204,6 +239,12 @@ Replace `TICKET_ID` with the GLPI ticket ID and `FINDINGS_TEXT` with a structure
 
 If the investigation resolved the issue (e.g., CMDB was updated, no critical findings), change the ticket status to Solved (status=5):
 
+**OAuth2:**
+```shell
+curl.exe -s -X PATCH -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d "{\"status\": 5}" "GLPI_URL/api.php/v2.2/Assistance/Ticket/TICKET_ID"
+```
+
+**Legacy API:**
 ```shell
 curl.exe -s -X PUT -H "Session-Token: TOKEN" -H "Content-Type: application/json" -d "{\"input\": {\"status\": 5}}" "GLPI_URL/apirest.php/Ticket/TICKET_ID"
 ```

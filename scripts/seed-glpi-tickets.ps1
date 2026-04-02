@@ -3,34 +3,46 @@
     Creates sample tickets in GLPI to demonstrate the ticket-driven-remediation skill.
 
 .DESCRIPTION
-    Seeds GLPI with 3-4 realistic Wintel Ops tickets that the AI agent can read,
+    Seeds GLPI with 4 realistic Wintel Ops tickets that the AI agent can read,
     investigate, and resolve. Run this BEFORE invoking the ticket-driven-remediation skill.
+
+    Authentication: Tries OAuth2 first. If that fails (e.g. GLPI build doesn't
+    support it), automatically falls back to the legacy REST API with HTTP Basic auth.
 
 .PARAMETER GlpiUrl
     Base URL of the GLPI instance. Default: http://glpi-opsauto-demo.swedencentral.azurecontainer.io
 
 .PARAMETER ClientId
-    OAuth2 Client ID from GLPI Setup > OAuth Clients.
+    OAuth2 Client ID from GLPI Setup > OAuth Clients. Optional — only needed for OAuth2.
 
 .PARAMETER ClientSecret
-    OAuth2 Client Secret.
+    OAuth2 Client Secret. Optional — only needed for OAuth2.
 
 .PARAMETER Username
     GLPI username. Default: glpi
 
 .PARAMETER Password
-    GLPI admin password.
+    GLPI admin password. Default: glpi
 
 .EXAMPLE
+    # OAuth2 (if configured)
     .\seed-glpi-tickets.ps1 -ClientId "abc123" -ClientSecret "secret456" -Password "MyPass!"
+
+.EXAMPLE
+    # Legacy API (no OAuth2 needed — just username/password)
+    .\seed-glpi-tickets.ps1 -Password "glpi"
+
+.EXAMPLE
+    # All defaults (glpi/glpi, legacy fallback)
+    .\seed-glpi-tickets.ps1
 #>
 
 param(
-    [string]$GlpiUrl = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io",
-    [Parameter(Mandatory)][string]$ClientId,
-    [Parameter(Mandatory)][string]$ClientSecret,
-    [string]$Username = "glpi",
-    [Parameter(Mandatory)][string]$Password
+    [string]$GlpiUrl      = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io",
+    [string]$ClientId     = "",
+    [string]$ClientSecret = "",
+    [string]$Username     = "glpi",
+    [string]$Password     = "glpi"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,38 +51,78 @@ Write-Host "`n=== GLPI Ticket Seeder ===" -ForegroundColor Cyan
 Write-Host "URL: $GlpiUrl"
 Write-Host ""
 
-# --- Step 1: Get OAuth2 Token ---
-Write-Host "[1/2] Authenticating to GLPI..." -ForegroundColor Yellow
-$tokenBody = @{
-    grant_type    = "password"
-    client_id     = $ClientId
-    client_secret = $ClientSecret
-    username      = $Username
-    password      = $Password
-    scope         = "api"
+# ── Authentication ───────────────────────────────────────────────────────────
+# Try OAuth2 first; fall back to legacy REST API if it fails.
+
+$authMode   = $null   # "oauth2" or "legacy"
+$authHeader = @{}
+
+# --- Attempt 1: OAuth2 (if credentials supplied) ---
+if ($ClientId -and $ClientSecret) {
+    Write-Host "[Auth] Trying OAuth2..." -ForegroundColor Yellow
+    try {
+        $tokenResp = Invoke-RestMethod -Uri "$GlpiUrl/api.php/token" -Method Post -Body @{
+            grant_type    = "password"
+            client_id     = $ClientId
+            client_secret = $ClientSecret
+            username      = $Username
+            password      = $Password
+            scope         = "api"
+        }
+        $authHeader = @{
+            "Authorization" = "Bearer $($tokenResp.access_token)"
+            "Content-Type"  = "application/json"
+        }
+        $authMode = "oauth2"
+        Write-Host "  OAuth2 token acquired." -ForegroundColor Green
+    } catch {
+        Write-Host "  OAuth2 failed: $($_.Exception.Message)" -ForegroundColor DarkYellow
+        Write-Host "  Falling back to legacy API..." -ForegroundColor DarkYellow
+    }
 }
 
-try {
-    $tokenResp = Invoke-RestMethod -Uri "$GlpiUrl/api.php/token" -Method Post -Body $tokenBody
-    $token = $tokenResp.access_token
-    Write-Host "  Token acquired." -ForegroundColor Green
-} catch {
-    Write-Host "  ERROR: Failed to authenticate. Check credentials." -ForegroundColor Red
-    Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+# --- Attempt 2: Legacy REST API (Basic auth → session token) ---
+if (-not $authMode) {
+    Write-Host "[Auth] Using legacy REST API (Basic auth)..." -ForegroundColor Yellow
+    $base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("${Username}:${Password}"))
+    try {
+        $sessionResp = Invoke-RestMethod -Uri "$GlpiUrl/apirest.php/initSession" `
+            -Headers @{ "Authorization" = "Basic $base64"; "Content-Type" = "application/json" }
+        $authHeader = @{
+            "Session-Token" = $sessionResp.session_token
+            "Content-Type"  = "application/json"
+        }
+        $authMode = "legacy"
+        Write-Host "  Session token acquired." -ForegroundColor Green
+    } catch {
+        Write-Host "  Legacy API also failed: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  Check that GLPI is running and credentials are correct." -ForegroundColor Red
+        exit 1
+    }
 }
 
-$headers = @{
-    "Authorization" = "Bearer $token"
-    "Content-Type"  = "application/json"
+# ── Helper: pick the right endpoint & body shape ─────────────────────────────
+function New-GlpiTicket {
+    param([hashtable]$Ticket)
+
+    if ($authMode -eq "oauth2") {
+        $uri  = "$GlpiUrl/api.php/v2.2/Assistance/Ticket"
+        $body = $Ticket | ConvertTo-Json -Depth 5
+    } else {
+        $uri  = "$GlpiUrl/apirest.php/Ticket"
+        $body = @{ input = $Ticket } | ConvertTo-Json -Depth 5
+    }
+
+    $resp = Invoke-RestMethod -Uri $uri -Method Post -Headers $authHeader -Body $body
+    return $resp.id
 }
 
-# --- Step 2: Create sample tickets ---
-Write-Host "[2/2] Creating sample tickets..." -ForegroundColor Yellow
+# ── Ticket Definitions ───────────────────────────────────────────────────────
+Write-Host "`n[Tickets] Creating sample tickets..." -ForegroundColor Yellow
 
 $tickets = @(
     @{
-        name     = "[CMDB] ArcBox-Win2K25 OS mismatch — GLPI shows Windows Server 2022, actual is 2025"
+        name     = "[CMDB] ArcBox-Win2K25 OS mismatch - GLPI shows Windows Server 2022, actual is 2025"
         content  = @"
 <p>During monthly CMDB reconciliation, a mismatch was detected:</p>
 <ul>
@@ -131,33 +183,39 @@ $tickets = @(
     }
 )
 
+# ── Create Tickets ───────────────────────────────────────────────────────────
 $createdTickets = @()
 
 foreach ($ticket in $tickets) {
     try {
-        $body = $ticket | ConvertTo-Json -Depth 5
-        $resp = Invoke-RestMethod -Uri "$GlpiUrl/api.php/v2.2/Assistance/Ticket" -Method Post -Headers $headers -Body $body
-        $ticketId = $resp.id
+        $ticketId = New-GlpiTicket -Ticket $ticket
         $createdTickets += [PSCustomObject]@{
             ID       = $ticketId
             Title    = $ticket.name
             Priority = $ticket.priority
             URL      = "$GlpiUrl/front/ticket.form.php?id=$ticketId"
         }
-        Write-Host "  Created ticket #$ticketId : $($ticket.name)" -ForegroundColor Green
+        Write-Host "  Created #$ticketId : $($ticket.name)" -ForegroundColor Green
     } catch {
         Write-Host "  ERROR creating ticket: $($ticket.name)" -ForegroundColor Red
         Write-Host "    $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
-# --- Summary ---
-Write-Host "`n=== Tickets Created ===" -ForegroundColor Cyan
+# ── Cleanup: kill legacy session ─────────────────────────────────────────────
+if ($authMode -eq "legacy") {
+    try { Invoke-RestMethod -Uri "$GlpiUrl/apirest.php/killSession" -Headers $authHeader | Out-Null } catch {}
+}
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+Write-Host "`n=== Tickets Created ($authMode auth) ===" -ForegroundColor Cyan
 $createdTickets | Format-Table -AutoSize
 
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Verify tickets in GLPI UI: $GlpiUrl/front/ticket.php"
 Write-Host "  2. Invoke the ticket-driven-remediation skill in Copilot CLI:"
 Write-Host ""
-Write-Host '  copilot -p "Use the /ticket-driven-remediation skill. Read open tickets from GLPI at GLPI_URL using client_id=CLIENT_ID, client_secret=CLIENT_SECRET, username=glpi, password=PASSWORD. Investigate each ticket and update with findings." --allow-all-tools' -ForegroundColor White
+Write-Host '  copilot -p "Use the /ticket-driven-remediation skill. Connect to GLPI at ' -NoNewline
+Write-Host "$GlpiUrl" -NoNewline -ForegroundColor White
+Write-Host ' with username=glpi, password=glpi. Read all open tickets, investigate each one, update with findings, and solve." --allow-all-tools'
 Write-Host ""
