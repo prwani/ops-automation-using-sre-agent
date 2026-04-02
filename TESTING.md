@@ -27,7 +27,7 @@ copilot
 > /skills list
 ```
 
-You should see 5 skills: wintel-health-check-investigation, security-agent-troubleshooting, compliance-investigation, patch-validation, vmware-bau-operations
+You should see 6 skills: wintel-health-check-investigation, security-agent-troubleshooting, compliance-investigation, patch-validation, vmware-bau-operations, ticket-driven-remediation
 
 ### Step 4: Run your first test
 ```bash
@@ -59,6 +59,18 @@ copilot -p "Use the /patch-validation skill. Query Azure Update Manager for miss
 ### Skill 5: VMware BAU
 ```bash
 copilot -p "Use the /vmware-bau-operations skill. Find all Azure VMs that host Hyper-V, list ALL checkpoints on each, classify by age (KEEP <7d, WARNING 7-30d, CRITICAL >30d), and show a cleanup summary." --allow-all-tools
+```
+
+### Skill 6: Ticket-Driven Remediation (requires GLPI)
+
+**Prerequisite:** Seed sample tickets first:
+```powershell
+.\scripts\seed-glpi-tickets.ps1 -ClientId "YOUR_CLIENT_ID" -ClientSecret "YOUR_SECRET" -Password "YOUR_PASSWORD"
+```
+
+Then invoke the skill:
+```bash
+copilot -p "Use the /ticket-driven-remediation skill. Connect to GLPI at http://glpi-opsauto-demo.swedencentral.azurecontainer.io using client_id=YOUR_CLIENT_ID, client_secret=YOUR_CLIENT_SECRET, username=glpi, password=YOUR_PASSWORD. Read all open tickets, investigate each one using Azure Arc and Defender for Cloud, update each ticket with your findings, and mark resolved tickets as Solved." --allow-all-tools
 ```
 
 ## Automation Scripts (No AI — deterministic)
@@ -117,6 +129,7 @@ For step-by-step walkthroughs with expected output:
 - [Scenario E: Patching](docs/implementations/scenario-e-patching/option-c-copilot-cli.md)
 - [Scenario F: CMDB Sync](docs/implementations/scenario-f-cmdb-sync/option-c-copilot-cli.md)
 - [Scenario G: Snapshot Cleanup](docs/implementations/scenario-g-snapshot-cleanup/option-c-copilot-cli.md)
+- [Scenario H: Ticket-Driven Remediation](docs/demos/scenario-h-ticket-remediation.md) *(requires GLPI)*
 
 ## Other AI Tier Options
 

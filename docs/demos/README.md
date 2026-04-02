@@ -33,6 +33,7 @@ fully deterministic.
 | **E** | Monthly Patching | 85 % | 15 % | [`scenario-e-patching.md`](scenario-e-patching.md) | Assess, deploy, and validate OS patches via Azure Update Manager with pre/post checks and auto-rollback; AI recommends wave grouping and flags risky KBs. |
 | **F** | CMDB Sync | 100 % | 0 % | [`scenario-f-cmdb-sync.md`](scenario-f-cmdb-sync.md) | Compare Azure Resource Graph (source of truth) against GLPI CMDB; auto-update matches, flag ambiguous cases — **no AI needed**. |
 | **G** | Snapshot / Checkpoint Cleanup | 100 % | 0 % | [`scenario-g-snapshot-cleanup.md`](scenario-g-snapshot-cleanup.md) | Delete stale Hyper-V checkpoints older than 7 days with safety checks on VM state — **no AI needed**. |
+| **H** | Ticket-Driven Remediation | 30 % | 70 % | [`scenario-h-ticket-remediation.md`](scenario-h-ticket-remediation.md) | Read open GLPI tickets, classify by type (CMDB/health/security/compliance), investigate using Azure Arc/Defender, update ticket with findings, auto-resolve. |
 
 ---
 
@@ -61,6 +62,9 @@ then close by proving that not every problem needs AI.
   interested in Defender for Cloud integration and contextual AI diagnosis.
 - **G — Snapshot / Checkpoint Cleanup** (100 / 0 split): Second "no AI" demo;
   useful for audiences sceptical about AI hype.
+- **H — Ticket-Driven Remediation** (30 / 70 split): The strongest AI demo —
+  agent reads ITSM tickets, classifies intent, investigates, and writes back
+  findings. Best for audiences wanting to see closed-loop autonomous operations.
 
 ---
 

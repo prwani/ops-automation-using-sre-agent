@@ -130,3 +130,182 @@ def main(server_name: str) -> dict:
 
     return {"found": False, "server_name": server_name, "message": "Not found in CMDB"}
 
+
+# ============================================================
+# Tool 3: glpi-list-open-tickets
+# Description: List all open (New/Assigned) tickets in GLPI
+# ============================================================
+
+
+def main() -> dict:
+    """List all open tickets from GLPI (status=New or Assigned).
+
+    Returns tickets with id, name, content, status, priority, and date.
+    """
+    import requests
+
+    GLPI_BASE = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io"
+    CLIENT_ID = "your-client-id"
+    CLIENT_SECRET = "your-client-secret"
+    USERNAME = "glpi"
+    PASSWORD = "your-admin-password"
+
+    resp = requests.post(
+        f"{GLPI_BASE}/api.php/token",
+        data={
+            "grant_type": "password",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "username": USERNAME,
+            "password": PASSWORD,
+            "scope": "api",
+        },
+    )
+    resp.raise_for_status()
+    token = resp.json()["access_token"]
+
+    resp = requests.get(
+        f"{GLPI_BASE}/api.php/v2.2/Assistance/Ticket",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp.raise_for_status()
+    all_tickets = resp.json()
+
+    # Filter for open tickets: status 1 (New) or 2 (Assigned)
+    open_tickets = [
+        {
+            "id": t.get("id"),
+            "name": t.get("name"),
+            "content": t.get("content", "")[:500],
+            "status": t.get("status"),
+            "priority": t.get("priority"),
+            "date": t.get("date"),
+        }
+        for t in (all_tickets if isinstance(all_tickets, list) else [all_tickets])
+        if t.get("status") in (1, 2)
+    ]
+
+    return {
+        "total_open": len(open_tickets),
+        "tickets": open_tickets,
+    }
+
+
+# ============================================================
+# Tool 4: glpi-add-followup
+# Description: Add a followup note to an existing GLPI ticket
+# ============================================================
+
+
+def main(ticket_id: str, content: str) -> dict:
+    """Add a followup note to a GLPI ticket (v11 OAuth2 API).
+
+    Args:
+        ticket_id: The numeric ID of the GLPI ticket.
+        content: The followup text (supports HTML).
+    """
+    import requests
+
+    GLPI_BASE = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io"
+    CLIENT_ID = "your-client-id"
+    CLIENT_SECRET = "your-client-secret"
+    USERNAME = "glpi"
+    PASSWORD = "your-admin-password"
+
+    resp = requests.post(
+        f"{GLPI_BASE}/api.php/token",
+        data={
+            "grant_type": "password",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "username": USERNAME,
+            "password": PASSWORD,
+            "scope": "api",
+        },
+    )
+    resp.raise_for_status()
+    token = resp.json()["access_token"]
+
+    # Try v2 API first
+    url = f"{GLPI_BASE}/api.php/v2.2/Assistance/Ticket/{ticket_id}/ITILFollowup"
+    resp = requests.post(
+        url,
+        json={"content": content},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    if resp.status_code in (200, 201):
+        return {
+            "ticket_id": ticket_id,
+            "followup_added": True,
+            "status": "success",
+        }
+
+    return {
+        "ticket_id": ticket_id,
+        "followup_added": False,
+        "status": "error",
+        "error": resp.text[:300],
+    }
+
+
+# ============================================================
+# Tool 5: glpi-update-computer
+# Description: Update a GLPI CMDB computer record
+# ============================================================
+
+
+def main(computer_id: str, comment: str) -> dict:
+    """Update a computer CI record in GLPI CMDB (v11 OAuth2 API).
+
+    Args:
+        computer_id: The numeric ID of the GLPI computer record.
+        comment: New comment/description for the computer record.
+    """
+    import requests
+
+    GLPI_BASE = "http://glpi-opsauto-demo.swedencentral.azurecontainer.io"
+    CLIENT_ID = "your-client-id"
+    CLIENT_SECRET = "your-client-secret"
+    USERNAME = "glpi"
+    PASSWORD = "your-admin-password"
+
+    resp = requests.post(
+        f"{GLPI_BASE}/api.php/token",
+        data={
+            "grant_type": "password",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "username": USERNAME,
+            "password": PASSWORD,
+            "scope": "api",
+        },
+    )
+    resp.raise_for_status()
+    token = resp.json()["access_token"]
+
+    resp = requests.patch(
+        f"{GLPI_BASE}/api.php/v2.2/Assets/Computer/{computer_id}",
+        json={"comment": comment},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    if resp.status_code in (200, 204):
+        return {
+            "computer_id": computer_id,
+            "updated": True,
+            "new_comment": comment[:200],
+        }
+
+    return {
+        "computer_id": computer_id,
+        "updated": False,
+        "error": resp.text[:300],
+    }
+
